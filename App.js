@@ -926,7 +926,7 @@ export default function App() {
 
                 <TouchableOpacity onPress={() => setActiveTab('stats')} className="p-2"><Activity color={activeTab==='stats'?'#3B82F6':'gray'} /></TouchableOpacity>
 
-                <TouchableOpacity onPress={() => setActiveTab('timer')} className="-mt-8 bg-blue-600 p-4 rounded-full shadow-lg"><Moon color="white" fill="white" /></TouchableOpacity>
+                <TouchableOpacity onPress={() => setActiveTab('timer')} className="-mt-8 bg-blue-600 p-4 px-4 py-6 rounded-full shadow-lg"><Moon color="white" fill="white" /></TouchableOpacity>
 
                 <TouchableOpacity onPress={() => setActiveTab('profile')} className="p-2"><User color={activeTab==='profile'?'#3B82F6':'gray'} /></TouchableOpacity>
 
