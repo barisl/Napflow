@@ -7,20 +7,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Audio } from 'expo-av';
 
-// Wir importieren die Icons ganz normal
+// Import icons normally
 
 import { Play, Pause, Trophy, Activity, Moon, Battery, Zap, Wind, CheckCircle, Flame, Clock, Plus, Minus, X, User, RotateCcw, Star, Award, Target, TrendingUp, Calendar, BarChart3, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { StatusBar } from 'expo-status-bar';
 
-// WICHTIG: Kein cssInterop importieren, das gibt es in v2 nicht!
-
-// Wir brauchen auch kein registerRootComponent, da package.json jetzt stimmt.
-
-
-
-// Benachrichtigungs-Handler
+// Notification handler
 
 Notifications.setNotificationHandler({
 
@@ -40,7 +34,7 @@ Notifications.setNotificationHandler({
 
 
 
-// Daten
+// Data
 
 const LEVELS = [
 
@@ -116,7 +110,7 @@ export default function App() {
 
         const init = async () => {
 
-            // Benachrichtigungen anfragen
+            // Request notifications
 
             const { status } = await Notifications.requestPermissionsAsync();
 
@@ -130,7 +124,7 @@ export default function App() {
 
                     setUserStats(parsed);
 
-                    // Wenn kein Name gesetzt ist, zeige Onboarding
+                    // If no name is set, show onboarding
 
                     if (!parsed.name || parsed.name === "") {
 
@@ -140,7 +134,7 @@ export default function App() {
 
                 } else {
 
-                    // Beim allerersten Start
+                    // On first launch
 
                     setShowOnboarding(true);
 
@@ -176,7 +170,7 @@ export default function App() {
 
         if (isRunning && timeLeft > 0) {
 
-            // Stoppe Alarm, wenn ein neuer Timer startet
+            // Stop alarm when a new timer starts
 
             isAlarmActiveRef.current = false;
 
@@ -197,7 +191,7 @@ export default function App() {
     }, [isRunning, timeLeft]);
 
 
-    // Cleanup beim Unmount
+    // Cleanup on unmount
 
     useEffect(() => {
 
@@ -229,7 +223,7 @@ export default function App() {
 
     }, []);
 
-    // Cleanup für Custom Time Interval wenn Modal geschlossen wird
+    // Cleanup for Custom Time Interval when modal is closed
 
     useEffect(() => {
 
@@ -263,7 +257,7 @@ export default function App() {
 
         try {
 
-            // Audio-Berechtigungen anfordern für längeren Sound
+            // Request audio permissions for longer sound
 
             await Audio.setAudioModeAsync({
 
@@ -273,9 +267,9 @@ export default function App() {
 
             });
 
-            // Sende mehrere Benachrichtigungen für einen längeren Weckerton
+            // Send multiple notifications for a longer alarm sound
 
-            // Erste Benachrichtigung mit Text
+            // First notification with text
 
             await Notifications.scheduleNotificationAsync({
 
@@ -293,16 +287,16 @@ export default function App() {
 
             });
 
-            // Kontinuierliche Benachrichtigungen für längeren Ton (alle 1.5 Sekunden)
-            // Läuft weiter, bis der Benutzer auf "XP Einsammeln" klickt
+            // Continuous notifications for longer sound (every 1.5 seconds)
+            // Continues until user clicks "Collect XP"
 
             alarmTimeoutsRef.current = [];
             isAlarmActiveRef.current = true;
 
-            // Rekursive Funktion, die sich selbst aufruft, bis der Alarm gestoppt wird
+            // Recursive function that calls itself until alarm is stopped
             const sendAlarmNotification = async (iteration = 1) => {
                 if (!isAlarmActiveRef.current) {
-                    return; // Stoppe, wenn Alarm deaktiviert wurde
+                    return; // Stop if alarm was deactivated
                 }
 
                 try {
@@ -310,30 +304,30 @@ export default function App() {
                         content: { 
                             title: "", 
                             body: "", 
-                            sound: true, // Nur Sound, kein Text
+                            sound: true, // Sound only, no text
                         },
                         trigger: null,
                     });
 
-                    // Plane nächste Benachrichtigung
+                    // Schedule next notification
                     const timeoutId = setTimeout(() => {
                         sendAlarmNotification(iteration + 1);
-                    }, 1500); // Alle 1.5 Sekunden eine Benachrichtigung
+                    }, 1500); // One notification every 1.5 seconds
 
                     alarmTimeoutsRef.current.push(timeoutId);
                 } catch (error) {
-                    console.error('Fehler beim Senden der Alarm-Benachrichtigung:', error);
+                    console.error('Error sending alarm notification:', error);
                 }
             };
 
-            // Starte die kontinuierlichen Benachrichtigungen
+            // Start continuous notifications
             sendAlarmNotification();
 
         } catch (error) {
 
-            console.error('Fehler beim Abspielen des Alarms:', error);
+            console.error('Error playing alarm:', error);
 
-            // Fallback: Normale Benachrichtigung
+            // Fallback: Normal notification
 
             await Notifications.scheduleNotificationAsync({
 
@@ -361,7 +355,7 @@ export default function App() {
 
     const finishNap = () => {
 
-        // Stoppe alle ausstehenden Alarm-Benachrichtigungen
+        // Stop all pending alarm notifications
         isAlarmActiveRef.current = false;
         alarmTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
         alarmTimeoutsRef.current = [];
@@ -454,7 +448,7 @@ export default function App() {
 
                     <View>
 
-                        <Text className="text-2xl font-bold text-white">NapFlow</Text>
+                        <Text className="text-2xl font-bold text-white">Napflow</Text>
 
                         <Text className="text-gray-400">Hallo, {userStats.name || "Schläfer"}</Text>
 
@@ -482,9 +476,9 @@ export default function App() {
 
                         </Text>
 
-                        {/* Timer Kreis */}
+                        {/* Timer Circle */}
                         <View className="items-center justify-center mb-10" style={{ width: 256, height: 256 }}>
-                            {/* Hintergrund-Kreis */}
+                            {/* Background Circle */}
                             <View 
                                 style={{
                                     position: 'absolute',
@@ -497,7 +491,7 @@ export default function App() {
                             />
                             
 
-                            {/* Innerer Kreis mit Text */}
+                            {/* Inner Circle with Text */}
                             <View 
                                 style={{
                                     position: 'absolute',
@@ -714,27 +708,27 @@ export default function App() {
                             <View className="flex-row justify-between items-end h-24 gap-2">
                                 {(() => {
                                     const today = new Date();
-                                    const currentDay = today.getDay(); // 0 = Sonntag, 1 = Montag, etc.
+                                    const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
                                     const dayNames = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
                                     const dayLabels = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
                                     
-                                    // Berechne den Montag dieser Woche
+                                    // Calculate Monday of this week
                                     const monday = new Date(today);
                                     const dayOfWeek = monday.getDay();
                                     const diff = monday.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // adjust when day is Sunday
                                     monday.setDate(diff);
                                     
                                     return dayLabels.map((dayLabel, index) => {
-                                        const dayIndex = index; // 0 = Montag, 6 = Sonntag
+                                        const dayIndex = index; // 0 = Monday, 6 = Sunday
                                         const dayDate = new Date(monday);
                                         dayDate.setDate(monday.getDate() + dayIndex);
                                         
-                                        // Prüfe ob der Tag in der Vergangenheit oder heute ist
+                                        // Check if the day is in the past or today
                                         const isPastOrToday = dayDate <= today;
                                         const isToday = dayDate.toDateString() === today.toDateString();
                                         
-                                        // Für jetzt: Zeige nur für vergangene Tage oder heute Daten
-                                        // In einer echten App würde hier die tatsächliche Nap-Anzahl aus den Daten kommen
+                                        // For now: Show data only for past days or today
+                                        // In a real app, the actual nap count would come from the data here
                                         const hasNap = isPastOrToday && (dayDate.toDateString() === userStats.lastNapDate || Math.random() > 0.7);
                                         const height = hasNap ? 40 + Math.random() * 20 : 10;
                                         
@@ -974,7 +968,6 @@ export default function App() {
                                 placeholder="Dein Name" 
                                 placeholderTextColor="#94a3b8" 
                                 className="flex-1 text-white text-base"
-                                autoFocus
                             />
                         </View>
 
@@ -1017,16 +1010,16 @@ export default function App() {
 
                             <TouchableOpacity 
                                 onPressIn={() => {
-                                    // Sofort eine einmalige Änderung
+                                    // Immediately make a single change
                                     setCustomMinutes(m => Math.max(1, m - 1));
                                     
-                                    // Nach 300ms Delay starte kontinuierliches Ändern (wenn noch gedrückt)
+                                    // After 300ms delay start continuous change (if still pressed)
                                     customTimePressTimeoutRef.current = setTimeout(() => {
                                         customTimeIntervalRef.current = setInterval(() => {
                                             setCustomMinutes(m => {
                                                 const newValue = Math.max(1, m - 1);
                                                 if (newValue === 1) {
-                                                    // Stoppe wenn Minimum erreicht
+                                                    // Stop when minimum reached
                                                     if (customTimeIntervalRef.current) {
                                                         clearInterval(customTimeIntervalRef.current);
                                                         customTimeIntervalRef.current = null;
@@ -1038,12 +1031,12 @@ export default function App() {
                                     }, 300);
                                 }}
                                 onPressOut={() => {
-                                    // Stoppe Timeout falls noch nicht abgelaufen
+                                    // Stop timeout if not yet expired
                                     if (customTimePressTimeoutRef.current) {
                                         clearTimeout(customTimePressTimeoutRef.current);
                                         customTimePressTimeoutRef.current = null;
                                     }
-                                    // Stoppe Interval falls bereits gestartet
+                                    // Stop interval if already started
                                     if (customTimeIntervalRef.current) {
                                         clearInterval(customTimeIntervalRef.current);
                                         customTimeIntervalRef.current = null;
@@ -1058,16 +1051,16 @@ export default function App() {
 
                             <TouchableOpacity 
                                 onPressIn={() => {
-                                    // Sofort eine einmalige Änderung
+                                    // Immediately make a single change
                                     setCustomMinutes(m => Math.min(180, m + 1));
                                     
-                                    // Nach 300ms Delay starte kontinuierliches Ändern (wenn noch gedrückt)
+                                    // After 300ms delay start continuous change (if still pressed)
                                     customTimePressTimeoutRef.current = setTimeout(() => {
                                         customTimeIntervalRef.current = setInterval(() => {
                                             setCustomMinutes(m => {
                                                 const newValue = Math.min(180, m + 1);
                                                 if (newValue === 180) {
-                                                    // Stoppe wenn Maximum erreicht
+                                                    // Stop when maximum reached
                                                     if (customTimeIntervalRef.current) {
                                                         clearInterval(customTimeIntervalRef.current);
                                                         customTimeIntervalRef.current = null;
@@ -1079,12 +1072,12 @@ export default function App() {
                                     }, 300);
                                 }}
                                 onPressOut={() => {
-                                    // Stoppe Timeout falls noch nicht abgelaufen
+                                    // Stop timeout if not yet expired
                                     if (customTimePressTimeoutRef.current) {
                                         clearTimeout(customTimePressTimeoutRef.current);
                                         customTimePressTimeoutRef.current = null;
                                     }
-                                    // Stoppe Interval falls bereits gestartet
+                                    // Stop interval if already started
                                     if (customTimeIntervalRef.current) {
                                         clearInterval(customTimeIntervalRef.current);
                                         customTimeIntervalRef.current = null;

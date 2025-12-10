@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "NapFlow",
-    "slug": "NapFlow",
+    "name": "Napflow",
+    "slug": "Napflow",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.barislx.NapFlow",
+      "bundleIdentifier": "com.barislx.Napflow",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
