@@ -180,16 +180,25 @@ export default function App() {
             alarmTimeoutsRef.current = [];
             interval = setInterval(() => {
                 setTimeLeft((t) => {
-                    if (t <= 1) {
-                        // Timer reached 0, trigger alarm
-                        setTimeout(() => handleAlarm(), 0);
+                    const newTime = t - 1;
+                    if (newTime <= 0) {
+                        // Timer reached 0, trigger alarm immediately
+                        clearInterval(interval);
+                        handleAlarm();
                         return 0;
                     }
-                    return t - 1;
+                    return newTime;
                 });
             }, 1000);
+        } else if (timeLeft === 0 && isRunning) {
+            // Fallback: if timer is already at 0 and running, trigger alarm
+            handleAlarm();
         }
-        return () => clearInterval(interval);
+        return () => {
+            if (interval) {
+                clearInterval(interval);
+            }
+        };
     }, [isRunning, timeLeft]);
 
     useEffect(() => {
@@ -225,53 +234,50 @@ export default function App() {
         }
     }, [showCustomModal]);
 
-    const handleAlarm = async () => {
+    const handleAlarm = () => {
         console.log('Alarm triggered!');
         setIsRunning(false);
-        try {
-            // Request notification permission if not granted
-            const permission = await requestNotificationPermission();
+        
+        // Play alarm sound immediately (don't wait for async operations)
+        playAlarmSound();
+        
+        // Request notification permission and show notification asynchronously
+        requestNotificationPermission().then(permission => {
             console.log('Notification permission:', permission);
-            
-            // Show notification
             if (permission === 'granted') {
                 showNotification("Aufwachen!", "Dein Nap ist vorbei.");
-            } else {
-                console.warn('Notification permission not granted');
             }
-            
-            // Play initial alarm sound
-            playAlarmSound();
-            
-            // Continuous alarm sound and notifications
-            alarmTimeoutsRef.current = [];
-            isAlarmActiveRef.current = true;
-            
-            const sendAlarmNotification = async (iteration = 1) => {
-                if (!isAlarmActiveRef.current) {
-                    return;
+        }).catch(error => {
+            console.error('Error requesting notification permission:', error);
+        });
+        
+        // Continuous alarm sound and notifications
+        alarmTimeoutsRef.current = [];
+        isAlarmActiveRef.current = true;
+        
+        const sendAlarmNotification = (iteration = 1) => {
+            if (!isAlarmActiveRef.current) {
+                return;
+            }
+            try {
+                playAlarmSound();
+                if (Notification.permission === 'granted') {
+                    showNotification("Aufwachen!", "Dein Nap ist vorbei.");
                 }
-                try {
-                    playAlarmSound();
-                    if (permission === 'granted') {
-                        showNotification("Aufwachen!", "Dein Nap ist vorbei.");
-                    }
-                    const timeoutId = setTimeout(() => {
-                        sendAlarmNotification(iteration + 1);
-                    }, 1500);
-                    alarmTimeoutsRef.current.push(timeoutId);
-                } catch (error) {
-                    console.error('Error sending alarm notification:', error);
-                }
-            };
-            
+                const timeoutId = setTimeout(() => {
+                    sendAlarmNotification(iteration + 1);
+                }, 1500);
+                alarmTimeoutsRef.current.push(timeoutId);
+            } catch (error) {
+                console.error('Error sending alarm notification:', error);
+            }
+        };
+        
+        // Start continuous alarm after initial sound
+        setTimeout(() => {
             sendAlarmNotification();
-        } catch (error) {
-            console.error('Error playing alarm:', error);
-            // Fallback: try to show notification anyway
-            showNotification("Aufwachen!", "Dein Nap ist vorbei.");
-            playAlarmSound();
-        }
+        }, 500);
+        
         setShowCompleteModal(true);
     };
 
