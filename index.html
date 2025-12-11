@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Napflow - Deine persönliche Nap-Timer App">
+    <meta name="theme-color" content="#0a1224">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/favicon.png">
+    <title>Napflow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #111827;
+            color: white;
+            overflow-x: hidden;
+        }
+        #root {
+            min-height: 100vh;
+        }
+        /* Prevent pull-to-refresh on mobile */
+        body {
+            overscroll-behavior-y: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div style="color: white; padding: 20px; text-align: center;">
+            <p>Lädt... Falls du das siehst, lädt JavaScript noch.</p>
+        </div>
+    </div>
+    <script type="module" src="/src/index.jsx"></script>
+</body>
+</html>
+
