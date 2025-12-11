@@ -1,0 +1,17 @@
+node_modules
+.git
+.expo
+.expo-shared
+dist
+*.log
+.DS_Store
+App.js
+index.js
+app.json
+eas.json
+babel.config.js
+metro.config.js
+global.css
+src/App-test.jsx
+test-server.html
+
