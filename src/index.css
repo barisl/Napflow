@@ -44,3 +44,57 @@ body {
   background: #4b5563;
 }
 
+/* Custom Range Slider Styles */
+input[type="range"].slider {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="range"].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ec4899;
+  cursor: pointer;
+  border: 3px solid #1f2937;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  margin-top: -4px;
+  position: relative;
+  top: -4px;
+}
+
+input[type="range"].slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ec4899;
+  cursor: pointer;
+  border: 3px solid #1f2937;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  margin-top: -4px;
+}
+
+input[type="range"].slider::-webkit-slider-thumb:hover {
+  background: #db2777;
+  transform: scale(1.1);
+}
+
+input[type="range"].slider::-moz-range-thumb:hover {
+  background: #db2777;
+  transform: scale(1.1);
+}
+
+input[type="range"].slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+  margin: 8px 0;
+}
+
+input[type="range"].slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: transparent;
+}
+

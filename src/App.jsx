@@ -76,18 +76,26 @@ let alarmOscillator = null;
 
 const playAlarmSound = () => {
     try {
+        // Resume AudioContext if suspended (required for autoplay policy)
         if (!alarmAudioContext) {
             alarmAudioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
+        if (alarmAudioContext.state === 'suspended') {
+            alarmAudioContext.resume();
+        }
         if (alarmOscillator) {
-            alarmOscillator.stop();
+            try {
+                alarmOscillator.stop();
+            } catch (e) {
+                // Ignore if already stopped
+            }
         }
         alarmOscillator = alarmAudioContext.createOscillator();
         const gainNode = alarmAudioContext.createGain();
         alarmOscillator.connect(gainNode);
         gainNode.connect(alarmAudioContext.destination);
         alarmOscillator.frequency.value = 800;
-        gainNode.gain.value = 0.3;
+        gainNode.gain.value = 0.5; // Increased volume
         alarmOscillator.start();
         alarmOscillator.stop(alarmAudioContext.currentTime + 0.5);
     } catch (e) {
@@ -131,6 +139,11 @@ export default function App() {
     const isAlarmActiveRef = useRef(false);
     const customTimeIntervalRef = useRef(null);
     const customTimePressTimeoutRef = useRef(null);
+    
+    // Swipe gesture handling
+    const touchStartX = useRef(0);
+    const touchStartY = useRef(0);
+    const minSwipeDistance = 50;
 
     useEffect(() => {
         const init = async () => {
@@ -165,9 +178,16 @@ export default function App() {
             isAlarmActiveRef.current = false;
             alarmTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
             alarmTimeoutsRef.current = [];
-            interval = setInterval(() => setTimeLeft((t) => t - 1), 1000);
-        } else if (timeLeft === 0 && isRunning) {
-            handleAlarm();
+            interval = setInterval(() => {
+                setTimeLeft((t) => {
+                    if (t <= 1) {
+                        // Timer reached 0, trigger alarm
+                        setTimeout(() => handleAlarm(), 0);
+                        return 0;
+                    }
+                    return t - 1;
+                });
+            }, 1000);
         }
         return () => clearInterval(interval);
     }, [isRunning, timeLeft]);
@@ -199,14 +219,29 @@ export default function App() {
                 clearTimeout(customTimePressTimeoutRef.current);
                 customTimePressTimeoutRef.current = null;
             }
+        } else {
+            // When modal opens, set customMinutes to 1 by default
+            setCustomMinutes(1);
         }
     }, [showCustomModal]);
 
     const handleAlarm = async () => {
+        console.log('Alarm triggered!');
         setIsRunning(false);
         try {
+            // Request notification permission if not granted
+            const permission = await requestNotificationPermission();
+            console.log('Notification permission:', permission);
+            
             // Show notification
-            showNotification("Aufwachen!", "Dein Nap ist vorbei.");
+            if (permission === 'granted') {
+                showNotification("Aufwachen!", "Dein Nap ist vorbei.");
+            } else {
+                console.warn('Notification permission not granted');
+            }
+            
+            // Play initial alarm sound
+            playAlarmSound();
             
             // Continuous alarm sound and notifications
             alarmTimeoutsRef.current = [];
@@ -218,7 +253,9 @@ export default function App() {
                 }
                 try {
                     playAlarmSound();
-                    showNotification("", "");
+                    if (permission === 'granted') {
+                        showNotification("Aufwachen!", "Dein Nap ist vorbei.");
+                    }
                     const timeoutId = setTimeout(() => {
                         sendAlarmNotification(iteration + 1);
                     }, 1500);
@@ -231,7 +268,9 @@ export default function App() {
             sendAlarmNotification();
         } catch (error) {
             console.error('Error playing alarm:', error);
+            // Fallback: try to show notification anyway
             showNotification("Aufwachen!", "Dein Nap ist vorbei.");
+            playAlarmSound();
         }
         setShowCompleteModal(true);
     };
@@ -273,10 +312,13 @@ export default function App() {
     const progressPercentage = isMaxLevel ? 100 : Math.min(100, (xpInCurrentLevel / xpNeededForNext) * 100);
 
     const startCustom = () => {
-        const sec = customMinutes * 60;
+        // Use the current customMinutes value directly
+        const minutes = customMinutes;
+        const sec = minutes * 60;
         setSelectedPreset({ id: 'custom', name: 'Custom', duration: sec, icon: Clock, color: 'bg-pink-500' });
         setTotalTime(sec);
         setTimeLeft(sec);
+        setIsRunning(false);
         setShowCustomModal(false);
     };
 
@@ -297,7 +339,48 @@ export default function App() {
     }
 
     return (
-        <div style={{ minHeight: '100vh', paddingTop: '40px', backgroundColor: '#111827' }}>
+        <div 
+            style={{ minHeight: '100vh', paddingTop: '40px', backgroundColor: '#111827' }}
+            onTouchStart={(e) => {
+                // Don't handle swipes when modal is open
+                if (showCustomModal || showCompleteModal || showOnboarding) return;
+                touchStartX.current = e.touches[0].clientX;
+                touchStartY.current = e.touches[0].clientY;
+            }}
+            onTouchEnd={(e) => {
+                // Don't handle swipes when modal is open
+                if (showCustomModal || showCompleteModal || showOnboarding) return;
+                if (!touchStartX.current || !touchStartY.current) return;
+                
+                const touchEndX = e.changedTouches[0].clientX;
+                const touchEndY = e.changedTouches[0].clientY;
+                
+                const deltaX = touchEndX - touchStartX.current;
+                const deltaY = touchEndY - touchStartY.current;
+                
+                // Only handle horizontal swipes (ignore vertical scrolling)
+                if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
+                    if (deltaX > 0) {
+                        // Swipe right → go to Stats (left tab)
+                        if (activeTab === 'timer') {
+                            setActiveTab('stats');
+                        } else if (activeTab === 'profile') {
+                            setActiveTab('timer');
+                        }
+                    } else {
+                        // Swipe left → go to Profile (right tab)
+                        if (activeTab === 'timer') {
+                            setActiveTab('profile');
+                        } else if (activeTab === 'stats') {
+                            setActiveTab('timer');
+                        }
+                    }
+                }
+                
+                touchStartX.current = 0;
+                touchStartY.current = 0;
+            }}
+        >
             <div style={{ paddingBottom: '100px', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
                 {/* Header */}
                 <div className="p-6 flex justify-between items-center">
@@ -352,7 +435,7 @@ export default function App() {
                         </div>
 
                         {/* Controls */}
-                        <div className="flex gap-6 mb-10 items-center justify-center">
+                        <div className="flex gap-6 mb-10 items-center justify-center mt-2">
                             {!isRunning && (
                                 <button onClick={() => setTimeLeft(totalTime)} className="p-3 bg-gray-800 rounded-full border border-gray-700">
                                     <RotateCcw size={20} color="gray" />
@@ -766,108 +849,63 @@ export default function App() {
             )}
 
             {showCustomModal && (
-                <div className="fixed inset-0 bg-black/80 flex items-end justify-center z-50">
+                <div 
+                    className="fixed inset-0 bg-black/80 flex items-end justify-center z-50"
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                >
                     <div className="bg-gray-800 p-6 rounded-t-3xl border-t border-gray-700 w-full max-w-md">
-                        <div className="flex justify-between mb-8">
-                            <h3 className="text-xl text-white font-bold">Zeit wählen</h3>
+                        <div className="flex justify-end mb-6">
                             <button onClick={()=>setShowCustomModal(false)}>
                                 <X color="gray" size={24} />
                             </button>
                         </div>
 
-                        <div className="flex justify-center items-center gap-8 mb-8">
-                            <button 
-                                onMouseDown={() => {
-                                    setCustomMinutes(m => Math.max(1, m - 1));
-                                    customTimePressTimeoutRef.current = setTimeout(() => {
-                                        customTimeIntervalRef.current = setInterval(() => {
-                                            setCustomMinutes(m => {
-                                                const newValue = Math.max(1, m - 1);
-                                                if (newValue === 1) {
-                                                    if (customTimeIntervalRef.current) {
-                                                        clearInterval(customTimeIntervalRef.current);
-                                                        customTimeIntervalRef.current = null;
-                                                    }
-                                                }
-                                                return newValue;
-                                            });
-                                        }, 150);
-                                    }, 300);
+                        <div className="mb-8">
+                            <div className="flex items-center justify-center mb-6 relative">
+                                <span className="text-6xl text-white font-bold">{customMinutes}</span>
+                                <button 
+                                    onClick={startCustom} 
+                                    className="bg-pink-500 px-4 py-2 rounded-lg hover:bg-pink-600 transition-colors absolute right-0"
+                                    style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <span className="text-white font-bold">OK</span>
+                                </button>
+                            </div>
+                            
+                            <input
+                                type="range"
+                                min="1"
+                                max="180"
+                                value={customMinutes}
+                                onChange={(e) => setCustomMinutes(parseInt(e.target.value))}
+                                onTouchStart={(e) => e.stopPropagation()}
+                                onTouchMove={(e) => e.stopPropagation()}
+                                onTouchEnd={(e) => e.stopPropagation()}
+                                className="w-full h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                                style={{
+                                    background: `linear-gradient(to right, #ec4899 0%, #ec4899 ${(customMinutes - 1) / 179 * 100}%, #374151 ${(customMinutes - 1) / 179 * 100}%, #374151 100%)`
                                 }}
-                                onMouseUp={() => {
-                                    if (customTimePressTimeoutRef.current) {
-                                        clearTimeout(customTimePressTimeoutRef.current);
-                                        customTimePressTimeoutRef.current = null;
-                                    }
-                                    if (customTimeIntervalRef.current) {
-                                        clearInterval(customTimeIntervalRef.current);
-                                        customTimeIntervalRef.current = null;
-                                    }
-                                }}
-                                onMouseLeave={() => {
-                                    if (customTimePressTimeoutRef.current) {
-                                        clearTimeout(customTimePressTimeoutRef.current);
-                                        customTimePressTimeoutRef.current = null;
-                                    }
-                                    if (customTimeIntervalRef.current) {
-                                        clearInterval(customTimeIntervalRef.current);
-                                        customTimeIntervalRef.current = null;
-                                    }
-                                }}
-                                className="bg-gray-700 p-4 rounded-full"
-                            >
-                                <Minus color="white" size={24} />
-                            </button>
-
-                            <span className="text-5xl text-white font-bold">{customMinutes}</span>
-
-                            <button 
-                                onMouseDown={() => {
-                                    setCustomMinutes(m => Math.min(180, m + 1));
-                                    customTimePressTimeoutRef.current = setTimeout(() => {
-                                        customTimeIntervalRef.current = setInterval(() => {
-                                            setCustomMinutes(m => {
-                                                const newValue = Math.min(180, m + 1);
-                                                if (newValue === 180) {
-                                                    if (customTimeIntervalRef.current) {
-                                                        clearInterval(customTimeIntervalRef.current);
-                                                        customTimeIntervalRef.current = null;
-                                                    }
-                                                }
-                                                return newValue;
-                                            });
-                                        }, 150);
-                                    }, 300);
-                                }}
-                                onMouseUp={() => {
-                                    if (customTimePressTimeoutRef.current) {
-                                        clearTimeout(customTimePressTimeoutRef.current);
-                                        customTimePressTimeoutRef.current = null;
-                                    }
-                                    if (customTimeIntervalRef.current) {
-                                        clearInterval(customTimeIntervalRef.current);
-                                        customTimeIntervalRef.current = null;
-                                    }
-                                }}
-                                onMouseLeave={() => {
-                                    if (customTimePressTimeoutRef.current) {
-                                        clearTimeout(customTimePressTimeoutRef.current);
-                                        customTimePressTimeoutRef.current = null;
-                                    }
-                                    if (customTimeIntervalRef.current) {
-                                        clearInterval(customTimeIntervalRef.current);
-                                        customTimeIntervalRef.current = null;
-                                    }
-                                }}
-                                className="bg-gray-700 p-4 rounded-full"
-                            >
-                                <Plus color="white" size={24} />
-                            </button>
+                            />
+                            
+                            <div className="flex justify-between text-sm text-gray-400 mt-2">
+                                <span>1 Min</span>
+                                <span>180 Min</span>
+                            </div>
                         </div>
 
-                        <button onClick={startCustom} className="bg-pink-500 p-4 rounded-xl w-full text-center">
-                            <span className="text-white font-bold">Starten</span>
-                        </button>
+                        <div className="flex justify-center">
+                            <button 
+                                onClick={() => setShowCustomModal(false)} 
+                                className="bg-gray-700 px-6 py-3 rounded-xl text-center"
+                            >
+                                <span className="text-white font-bold">Abbrechen</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
