@@ -65,7 +65,6 @@ const translations = {
             registerError: "Fehler beim Registrieren",
             wakeUp: "Aufwachen!",
             napFinished: "Dein Nap ist vorbei.",
-            hello: "Hallo",
             welcome: "Willkommen",
             welcomeBack: "Willkommen zurück",
             createAccount: "Erstelle ein Konto, um zu starten",
@@ -91,8 +90,6 @@ const translations = {
             firstNapAchievement: "Erster Nap",
             sevenDayStreak: "7-Tage Streak",
             fiftyNaps: "50 Naps",
-            maxLevelReached: "🎉 Maximales Level erreicht!",
-            xpUntil: "XP bis",
         }
     },
     en: {
@@ -155,7 +152,6 @@ const translations = {
             registerError: "Registration error",
             wakeUp: "Wake up!",
             napFinished: "Your nap is over.",
-            hello: "Hello",
             welcome: "Welcome",
             welcomeBack: "Welcome back",
             createAccount: "Create an account to get started",
@@ -181,8 +177,6 @@ const translations = {
             firstNapAchievement: "First Nap",
             sevenDayStreak: "7-Day Streak",
             fiftyNaps: "50 Naps",
-            maxLevelReached: "🎉 Maximum level reached!",
-            xpUntil: "XP until",
         }
     }
 };
