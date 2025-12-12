@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   root: '.',
   publicDir: 'public',
+  // Use index.html from root
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

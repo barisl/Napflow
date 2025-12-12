@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './index.css';
 import { Play, Pause, Trophy, Activity, Moon, Battery, Zap, Wind, CheckCircle, Flame, Clock, Plus, Minus, X, User, RotateCcw, Star, Award, Target, TrendingUp, Calendar, BarChart3, Sparkles } from 'lucide-react';
+import { supabase } from './supabaseClient';
 
 // Data
 const LEVELS = [
@@ -17,28 +18,84 @@ const PRESETS = [
     { id: 'recharge', name: 'Deep Recharge', duration: 90 * 60, icon: Battery, color: 'bg-indigo-500', desc: 'Voller Schlafzyklus' },
 ];
 
-// Helper function for localStorage
+// Helper function to get authenticated user ID
+const getUserId = (user) => {
+    if (user) {
+        return user.id;
+    }
+    return null;
+};
+
+// Helper functions for Supabase
 const storage = {
-    getItem: (key) => {
+    getItem: async (key, user) => {
         try {
-            return localStorage.getItem(key);
+            const userId = getUserId(user);
+            if (!userId) {
+                return null;
+            }
+            
+            const { data, error } = await supabase
+                .from('user_stats')
+                .select('data')
+                .eq('user_id', userId)
+                .eq('key', key)
+                .single();
+            
+            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+                console.error('Error reading from Supabase:', error);
+                return null;
+            }
+            
+            return data?.data || null;
         } catch (e) {
-            console.error('Error reading from localStorage:', e);
+            console.error('Error reading from Supabase:', e);
             return null;
         }
     },
-    setItem: (key, value) => {
+    setItem: async (key, value, user) => {
         try {
-            localStorage.setItem(key, value);
+            const userId = getUserId(user);
+            if (!userId) {
+                console.error('No user ID available for saving');
+                return;
+            }
+            
+            const { error } = await supabase
+                .from('user_stats')
+                .upsert({
+                    user_id: userId,
+                    key: key,
+                    data: value,
+                    updated_at: new Date().toISOString()
+                }, {
+                    onConflict: 'user_id,key'
+                });
+            
+            if (error) {
+                console.error('Error writing to Supabase:', error);
+            }
         } catch (e) {
-            console.error('Error writing to localStorage:', e);
+            console.error('Error writing to Supabase:', e);
         }
     },
-    clear: () => {
+    clear: async (user) => {
         try {
-            localStorage.clear();
+            const userId = getUserId(user);
+            if (!userId) {
+                return;
+            }
+            
+            const { error } = await supabase
+                .from('user_stats')
+                .delete()
+                .eq('user_id', userId);
+            
+            if (error) {
+                console.error('Error clearing Supabase:', error);
+            }
         } catch (e) {
-            console.error('Error clearing localStorage:', e);
+            console.error('Error clearing Supabase:', e);
         }
     }
 };
@@ -73,16 +130,50 @@ const showNotification = (title, body, options = {}) => {
 // Helper function for Web Audio (alarm sound)
 let alarmAudioContext = null;
 let alarmOscillator = null;
+let alarmGainNode = null;
 
-const playAlarmSound = () => {
+// Function to activate AudioContext (on timer start)
+const unlockAudioContext = async () => {
     try {
-        // Resume AudioContext if suspended (required for autoplay policy)
         if (!alarmAudioContext) {
             alarmAudioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
+        
         if (alarmAudioContext.state === 'suspended') {
-            alarmAudioContext.resume();
+            await alarmAudioContext.resume();
+            console.log('AudioContext activated');
         }
+        
+        // Very short, almost silent "Unlock" sound to activate AudioContext
+        const unlockOsc = alarmAudioContext.createOscillator();
+        const unlockGain = alarmAudioContext.createGain();
+        unlockGain.gain.value = 0.001; // Almost silent
+        unlockOsc.connect(unlockGain);
+        unlockGain.connect(alarmAudioContext.destination);
+        unlockOsc.frequency.value = 1; // Very low frequency
+        unlockOsc.start();
+        unlockOsc.stop(alarmAudioContext.currentTime + 0.01); // Very short
+        
+        return true;
+    } catch (e) {
+        console.error('Error unlocking audio context:', e);
+        return false;
+    }
+};
+
+const playAlarmSound = async () => {
+    try {
+        if (!alarmAudioContext) {
+            alarmAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        // IMPORTANT: Activate AudioContext if suspended (wait asynchronously!)
+        if (alarmAudioContext.state === 'suspended') {
+            await alarmAudioContext.resume();
+            console.log('AudioContext resumed for alarm');
+        }
+        
+        // Stop previous oscillator if exists
         if (alarmOscillator) {
             try {
                 alarmOscillator.stop();
@@ -90,23 +181,77 @@ const playAlarmSound = () => {
                 // Ignore if already stopped
             }
         }
+        
+        const currentTime = alarmAudioContext.currentTime;
+        
+        // Create and play sound with smooth fade-in and fade-out
         alarmOscillator = alarmAudioContext.createOscillator();
-        const gainNode = alarmAudioContext.createGain();
-        alarmOscillator.connect(gainNode);
-        gainNode.connect(alarmAudioContext.destination);
-        alarmOscillator.frequency.value = 800;
-        gainNode.gain.value = 0.5; // Increased volume
-        alarmOscillator.start();
-        alarmOscillator.stop(alarmAudioContext.currentTime + 0.5);
+        alarmGainNode = alarmAudioContext.createGain();
+        alarmOscillator.connect(alarmGainNode);
+        alarmGainNode.connect(alarmAudioContext.destination);
+        
+        // Smoother frequency (lower and more pleasant)
+        alarmOscillator.frequency.value = 600;
+        alarmOscillator.type = 'sine'; // Smoother wave type
+        
+        // Smooth fade-in and fade-out
+        alarmGainNode.gain.setValueAtTime(0, currentTime);
+        alarmGainNode.gain.linearRampToValueAtTime(0.4, currentTime + 0.1); // Fade in over 0.1s
+        alarmGainNode.gain.setValueAtTime(0.4, currentTime + 0.7); // Hold at 0.4
+        alarmGainNode.gain.linearRampToValueAtTime(0, currentTime + 0.8); // Fade out over 0.1s
+        
+        alarmOscillator.start(currentTime);
+        // Sound for 0.8 seconds (then 0.6s pause until next sound)
+        alarmOscillator.stop(currentTime + 0.8);
     } catch (e) {
         console.error('Error playing alarm sound:', e);
     }
 };
 
 const stopAlarmSound = () => {
-    if (alarmOscillator) {
-        alarmOscillator.stop();
+    if (alarmOscillator && alarmAudioContext && alarmGainNode) {
+        try {
+            const currentTime = alarmAudioContext.currentTime;
+            
+            // Fade out smoothly over 0.1 seconds
+            const currentGain = alarmGainNode.gain.value;
+            alarmGainNode.gain.cancelScheduledValues(currentTime);
+            alarmGainNode.gain.setValueAtTime(currentGain, currentTime);
+            alarmGainNode.gain.linearRampToValueAtTime(0, currentTime + 0.1);
+            
+            // Stop oscillator after fade-out
+            setTimeout(() => {
+                try {
+                    if (alarmOscillator) {
+                        alarmOscillator.stop();
+                    }
+                } catch (e) {
+                    // Ignore if already stopped
+                }
+                alarmOscillator = null;
+                alarmGainNode = null;
+            }, 100);
+        } catch (e) {
+            // Fallback: just stop if fade-out fails
+            try {
+                if (alarmOscillator) {
+                    alarmOscillator.stop();
+                }
+            } catch (e2) {
+                // Ignore
+            }
+            alarmOscillator = null;
+            alarmGainNode = null;
+        }
+    } else if (alarmOscillator) {
+        // Fallback if gainNode is not available
+        try {
+            alarmOscillator.stop();
+        } catch (e) {
+            // Ignore
+        }
         alarmOscillator = null;
+        alarmGainNode = null;
     }
 };
 
@@ -134,7 +279,20 @@ export default function App() {
     const [userStats, setUserStats] = useState({
         name: "", xp: 0, totalNaps: 0, totalMinutes: 0, currentStreak: 0, lastNapDate: null
     });
+    const [statsKey, setStatsKey] = useState(0); // Force re-render key
+    const [weeklyNaps, setWeeklyNaps] = useState({}); // { '2024-01-15': 2, '2024-01-16': 1, ... }
     const [isLoaded, setIsLoaded] = useState(false);
+    const isUpdatingStatsRef = useRef(false); // Prevent loadUserData from overwriting updates
+    
+    // Auth state
+    const [user, setUser] = useState(null);
+    const [session, setSession] = useState(null);
+    const [authLoading, setAuthLoading] = useState(true);
+    const [showAuthModal, setShowAuthModal] = useState(false);
+    const [isLoginMode, setIsLoginMode] = useState(true);
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [authError, setAuthError] = useState("");
     const alarmTimeoutsRef = useRef([]);
     const isAlarmActiveRef = useRef(false);
     const customTimeIntervalRef = useRef(null);
@@ -145,32 +303,287 @@ export default function App() {
     const touchStartY = useRef(0);
     const minSwipeDistance = 50;
 
+    // Check auth session on mount
     useEffect(() => {
-        const init = async () => {
-            // Request notifications
-            await requestNotificationPermission();
+        const checkSession = async () => {
             try {
-                const jsonValue = storage.getItem('@napflow_data_final_v2');
-                if (jsonValue != null) {
-                    const parsed = JSON.parse(jsonValue);
-                    setUserStats(parsed);
-                    if (!parsed.name || parsed.name === "") {
-                        setShowOnboarding(true);
-                    }
+                // Get existing session from storage
+                const { data: { session }, error } = await supabase.auth.getSession();
+                
+                if (error) {
+                    console.error('Error getting session:', error);
+                }
+                
+                if (session) {
+                    console.log('Session found, user:', session.user.email);
+                    setSession(session);
+                    setUser(session.user);
+                    setShowAuthModal(false);
+                    // Load user data
+                    await loadUserData(session.user);
                 } else {
+                    console.log('No session found');
+                    setShowAuthModal(true);
+                }
+            } catch (error) {
+                console.error('Error checking session:', error);
+                setShowAuthModal(true);
+            } finally {
+                setAuthLoading(false);
+            }
+        };
+        
+        checkSession();
+        
+        // Listen for auth changes (login, logout, token refresh)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            async (event, session) => {
+                console.log('Auth state changed:', event, session?.user?.email);
+                setSession(session);
+                setUser(session?.user ?? null);
+                
+                if (session) {
+                    setShowAuthModal(false);
+                    // Load user data after login or token refresh
+                    await loadUserData(session.user);
+                } else {
+                    // Only show auth modal on explicit logout, not on initial load
+                    if (event === 'SIGNED_OUT') {
+                        setShowAuthModal(true);
+                    }
+                }
+            }
+        );
+        
+        return () => subscription.unsubscribe();
+    }, []);
+    
+    // Load weekly naps from database
+    const loadWeeklyNaps = async (currentUser) => {
+        try {
+            const today = new Date();
+            const monday = new Date(today);
+            const dayOfWeek = monday.getDay();
+            const diff = monday.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+            monday.setDate(diff);
+            monday.setHours(0, 0, 0, 0);
+            
+            const sunday = new Date(monday);
+            sunday.setDate(monday.getDate() + 6);
+            sunday.setHours(23, 59, 59, 999);
+            
+            const { data, error } = await supabase
+                .from('naps')
+                .select('nap_date, duration_minutes')
+                .eq('user_id', currentUser.id)
+                .gte('nap_date', monday.toISOString().split('T')[0])
+                .lte('nap_date', sunday.toISOString().split('T')[0])
+                .order('nap_date', { ascending: true });
+            
+            if (error) {
+                console.error('Error loading weekly naps:', error);
+                return;
+            }
+            
+            // Group naps by date and count
+            const napsByDate = {};
+            if (data) {
+                data.forEach(nap => {
+                    const date = nap.nap_date;
+                    if (!napsByDate[date]) {
+                        napsByDate[date] = 0;
+                    }
+                    napsByDate[date] += 1;
+                });
+            }
+            
+            setWeeklyNaps(napsByDate);
+        } catch (e) {
+            console.error('Error loading weekly naps:', e);
+        }
+    };
+    
+    // Load user data
+    const loadUserData = async (currentUser) => {
+        // Don't overwrite if stats are being updated
+        if (isUpdatingStatsRef.current) {
+            console.log('loadUserData - skipping, stats are being updated');
+            return;
+        }
+        
+        try {
+            const jsonValue = await storage.getItem('@napflow_data_final_v2', currentUser);
+            if (jsonValue != null) {
+                const parsed = typeof jsonValue === 'string' ? JSON.parse(jsonValue) : jsonValue;
+                setUserStats(parsed);
+                if (!parsed.name || parsed.name === "") {
                     setShowOnboarding(true);
                 }
+            } else {
+                setShowOnboarding(true);
+            }
+            // Load weekly naps
+            await loadWeeklyNaps(currentUser);
+            setIsLoaded(true);
+        } catch(e) { 
+            console.error('Error loading user data:', e);
+            setShowOnboarding(true);
+            setIsLoaded(true);
+        }
+    };
+    
+    // Initialize after auth
+    useEffect(() => {
+        const init = async () => {
+            if (!authLoading && user) {
+                // Request notifications
+                await requestNotificationPermission();
+                await loadUserData(user);
+            } else if (!authLoading && !user) {
                 setIsLoaded(true);
-            } catch(e) { console.error(e); }
+            }
         };
         init();
-    }, []);
-
+    }, [authLoading, user]);
+    
+    // Reload weekly naps when user changes
     useEffect(() => {
-        if (isLoaded) {
-            storage.setItem('@napflow_data_final_v2', JSON.stringify(userStats));
+        if (user && isLoaded) {
+            loadWeeklyNaps(user);
         }
-    }, [userStats, isLoaded]);
+    }, [user, isLoaded]);
+    
+    // Auto-refresh weekly naps when a new week starts
+    useEffect(() => {
+        if (!user || !isLoaded) return;
+        
+        // Calculate current week's Monday
+        const today = new Date();
+        const monday = new Date(today);
+        const dayOfWeek = monday.getDay();
+        const diff = monday.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        monday.setDate(diff);
+        monday.setHours(0, 0, 0, 0);
+        
+        // Calculate time until next Monday
+        const nextMonday = new Date(monday);
+        nextMonday.setDate(monday.getDate() + 7);
+        const msUntilNextMonday = nextMonday.getTime() - today.getTime();
+        
+        // Reload weekly naps when new week starts
+        const timeoutId = setTimeout(() => {
+            loadWeeklyNaps(user);
+            // Set up interval to check every hour if we're in a new week
+            const intervalId = setInterval(() => {
+                const now = new Date();
+                const currentMonday = new Date(now);
+                const currentDayOfWeek = currentMonday.getDay();
+                const currentDiff = currentMonday.getDate() - currentDayOfWeek + (currentDayOfWeek === 0 ? -6 : 1);
+                currentMonday.setDate(currentDiff);
+                currentMonday.setHours(0, 0, 0, 0);
+                
+                // If we're in a new week, reload data
+                if (currentMonday.getTime() !== monday.getTime()) {
+                    loadWeeklyNaps(user);
+                }
+            }, 60 * 60 * 1000); // Check every hour
+            
+            return () => clearInterval(intervalId);
+        }, msUntilNextMonday);
+        
+        // Also check on app focus/visibility change
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                loadWeeklyNaps(user);
+            }
+        };
+        
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        return () => {
+            clearTimeout(timeoutId);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [user, isLoaded]);
+
+    // Don't auto-save on every userStats change - we save explicitly in finishNap
+    // This useEffect was causing issues by potentially overwriting updates
+    // useEffect(() => {
+    //     if (isLoaded && user) {
+    //         // Only save if stats have meaningful data (not initial empty state)
+    //         if (userStats.name || userStats.xp > 0 || userStats.totalNaps > 0) {
+    //             // Async setItem - nicht blockierend
+    //             storage.setItem('@napflow_data_final_v2', JSON.stringify(userStats), user).catch(err => {
+    //                 console.error('Error saving to Supabase:', err);
+    //             });
+    //         }
+    //     }
+    // }, [userStats, isLoaded, user]);
+
+    // Define handleAlarm before useEffect that uses it
+    const handleAlarm = useCallback(async () => {
+        console.log('Alarm triggered!');
+        setIsRunning(false);
+        
+        // Show modal immediately
+        setShowCompleteModal(true);
+        
+        // Ensure AudioContext is unlocked before playing sound
+        try {
+            await unlockAudioContext();
+        } catch (error) {
+            console.error('Error unlocking audio context:', error);
+        }
+        
+        // Request notification permission and show notification asynchronously
+        requestNotificationPermission().then(permission => {
+            console.log('Notification permission:', permission);
+            if (permission === 'granted') {
+                showNotification("Aufwachen!", "Dein Nap ist vorbei.");
+            }
+        }).catch(error => {
+            console.error('Error requesting notification permission:', error);
+        });
+        
+        // Continuous alarm sound and notifications
+        alarmTimeoutsRef.current = [];
+        isAlarmActiveRef.current = true;
+        
+        // Function for continuous alarm
+        const sendAlarmNotification = async () => {
+            if (!isAlarmActiveRef.current) {
+                console.log('Alarm stopped - not playing sound');
+                return;
+            }
+            try {
+                console.log('Playing alarm sound...');
+                await playAlarmSound();
+                
+                // Only first notification with text, then silent
+                if (Notification.permission === 'granted') {
+                    showNotification("", "");
+                }
+                
+                // Next sound after 1.4 seconds (sound lasts 0.8s, then 0.6s pause)
+                const timeoutId = setTimeout(() => {
+                    sendAlarmNotification();
+                }, 1400);
+                alarmTimeoutsRef.current.push(timeoutId);
+            } catch (error) {
+                console.error('Error sending alarm notification:', error);
+                // Trotzdem weitermachen
+                if (isAlarmActiveRef.current) {
+                    const timeoutId = setTimeout(() => {
+                        sendAlarmNotification();
+                    }, 1400);
+                    alarmTimeoutsRef.current.push(timeoutId);
+                }
+            }
+        };
+        
+        // Starte kontinuierlichen Alarm sofort (kein doppelter initialer Sound)
+        sendAlarmNotification();
+    }, []);
 
     useEffect(() => {
         let interval = null;
@@ -199,7 +612,7 @@ export default function App() {
                 clearInterval(interval);
             }
         };
-    }, [isRunning, timeLeft]);
+    }, [isRunning, timeLeft, handleAlarm]);
 
     useEffect(() => {
         return () => {
@@ -234,79 +647,111 @@ export default function App() {
         }
     }, [showCustomModal]);
 
-    const handleAlarm = () => {
-        console.log('Alarm triggered!');
-        setIsRunning(false);
-        
-        // Play alarm sound immediately (don't wait for async operations)
-        playAlarmSound();
-        
-        // Request notification permission and show notification asynchronously
-        requestNotificationPermission().then(permission => {
-            console.log('Notification permission:', permission);
-            if (permission === 'granted') {
-                showNotification("Aufwachen!", "Dein Nap ist vorbei.");
-            }
-        }).catch(error => {
-            console.error('Error requesting notification permission:', error);
-        });
-        
-        // Continuous alarm sound and notifications
-        alarmTimeoutsRef.current = [];
-        isAlarmActiveRef.current = true;
-        
-        const sendAlarmNotification = (iteration = 1) => {
-            if (!isAlarmActiveRef.current) {
-                return;
-            }
-            try {
-                playAlarmSound();
-                if (Notification.permission === 'granted') {
-                    showNotification("Aufwachen!", "Dein Nap ist vorbei.");
-                }
-                const timeoutId = setTimeout(() => {
-                    sendAlarmNotification(iteration + 1);
-                }, 1500);
-                alarmTimeoutsRef.current.push(timeoutId);
-            } catch (error) {
-                console.error('Error sending alarm notification:', error);
-            }
-        };
-        
-        // Start continuous alarm after initial sound
-        setTimeout(() => {
-            sendAlarmNotification();
-        }, 500);
-        
-        setShowCompleteModal(true);
-    };
-
-    const finishNap = () => {
+    const finishNap = async () => {
         isAlarmActiveRef.current = false;
         alarmTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
         alarmTimeoutsRef.current = [];
         stopAlarmSound();
         
-        const today = new Date().toDateString();
+        const today = new Date();
+        const todayString = today.toDateString();
+        const todayDateString = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+        
         let newStreak = userStats.currentStreak;
-        if (userStats.lastNapDate && userStats.lastNapDate !== today) {
+        if (userStats.lastNapDate && userStats.lastNapDate !== todayString) {
             newStreak += 1;
         } else if (!userStats.lastNapDate) {
             newStreak = 1;
         }
         
-        const minutes = Math.floor(totalTime / 60);
-        setUserStats(prev => ({
-            ...prev,
-            xp: prev.xp + (minutes * 5),
-            totalNaps: prev.totalNaps + 1,
-            totalMinutes: prev.totalMinutes + minutes,
-            currentStreak: newStreak,
-            lastNapDate: today
-        }));
+        // Calculate minutes from the original preset duration
+        // selectedPreset.duration is in SECONDS, so we need to convert to minutes
+        // Use the original preset duration, not the current totalTime (which might be 0)
+        const originalDurationSeconds = selectedPreset?.duration || (totalTime > 0 ? totalTime : PRESETS[0].duration);
+        const minutes = Math.floor(originalDurationSeconds / 60);
+        const xpEarned = minutes * 5;
         
+        console.log('finishNap - originalDurationSeconds:', originalDurationSeconds, 'minutes:', minutes, 'xpEarned:', xpEarned, 'selectedPreset:', selectedPreset);
+        
+        // Save nap to database
+        if (user) {
+            try {
+                const { error } = await supabase
+                    .from('naps')
+                    .insert({
+                        user_id: user.id,
+                        nap_date: todayDateString,
+                        duration_minutes: minutes,
+                        xp_earned: xpEarned
+                    });
+                
+                if (error) {
+                    console.error('Error saving nap to database:', error);
+                } else {
+                    // Reload weekly naps to update the chart
+                    await loadWeeklyNaps(user);
+                }
+            } catch (e) {
+                console.error('Error saving nap:', e);
+            }
+        }
+        
+        // Mark that we're updating stats
+        isUpdatingStatsRef.current = true;
+        
+        // Update stats immediately (like before Supabase)
+        // Use functional update to ensure we have the latest state
+        setUserStats(prev => {
+            const newXP = (prev.xp || 0) + xpEarned;
+            const newStats = {
+                ...prev,
+                xp: newXP,
+                totalNaps: (prev.totalNaps || 0) + 1,
+                totalMinutes: (prev.totalMinutes || 0) + minutes,
+                currentStreak: newStreak,
+                lastNapDate: todayString
+            };
+            
+            console.log('finishNap - State update:', {
+                oldXP: prev.xp,
+                xpEarned: xpEarned,
+                newXP: newXP,
+                newStats: newStats
+            });
+            
+            // Save to Supabase asynchronously (don't block)
+            if (user) {
+                setTimeout(() => {
+                    storage.setItem('@napflow_data_final_v2', JSON.stringify(newStats), user)
+                        .then(() => {
+                            console.log('finishNap - saved to Supabase');
+                            // Allow loadUserData after save is complete
+                            setTimeout(() => {
+                                isUpdatingStatsRef.current = false;
+                            }, 500);
+                        })
+                        .catch(err => {
+                            console.error('Error saving:', err);
+                            isUpdatingStatsRef.current = false;
+                        });
+                }, 100);
+            } else {
+                isUpdatingStatsRef.current = false;
+            }
+            
+            return newStats;
+        });
+        
+        setStatsKey(prev => prev + 1);
+        
+        // Reset timer and stop running - ensure totalTime is valid
+        // Always use selectedPreset.duration for reset, as it's the original duration
+        const resetTime = selectedPreset?.duration || totalTime || PRESETS[0].duration;
+        console.log('finishNap - resetting timer to:', resetTime, 'selectedPreset:', selectedPreset);
+        setTimeLeft(resetTime);
+        setTotalTime(resetTime);
+        setIsRunning(false);
         setShowCompleteModal(false);
-        setTimeLeft(selectedPreset.duration);
     };
 
     const currentLevel = LEVELS.slice().reverse().find(l => userStats.xp >= l.minXP) || LEVELS[0];
@@ -328,11 +773,99 @@ export default function App() {
         setShowCustomModal(false);
     };
 
-    const handleReset = () => {
+    // Auth functions
+    const handleSignUp = async () => {
+        setAuthError("");
+        try {
+            const { data, error } = await supabase.auth.signUp({
+                email: email,
+                password: password,
+            });
+            
+            if (error) throw error;
+            
+            if (data.user) {
+                console.log('Sign up successful');
+                // Note: Supabase may require email confirmation
+                // If email confirmation is enabled, session might be null initially
+                if (data.session) {
+                    setSession(data.session);
+                    setUser(data.user);
+                    setShowAuthModal(false);
+                    setShowOnboarding(true);
+                } else {
+                    // Email confirmation required
+                    setAuthError('Bitte bestätige deine E-Mail-Adresse. Prüfe dein Postfach.');
+                }
+                // Clear email/password fields
+                setEmail("");
+                setPassword("");
+            }
+        } catch (error) {
+            console.error('Sign up error:', error);
+            setAuthError(error.message || 'Fehler beim Registrieren');
+        }
+    };
+    
+    const handleSignIn = async () => {
+        setAuthError("");
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+            
+            if (error) throw error;
+            
+            if (data.user && data.session) {
+                console.log('Login successful, session saved');
+                setSession(data.session);
+                setUser(data.user);
+                setShowAuthModal(false);
+                // Clear email/password fields
+                setEmail("");
+                setPassword("");
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            setAuthError(error.message || 'Fehler beim Anmelden');
+        }
+    };
+    
+    const handleSignOut = async () => {
+        await supabase.auth.signOut();
+        setUserStats({
+            name: "", xp: 0, totalNaps: 0, totalMinutes: 0, currentStreak: 0, lastNapDate: null
+        });
+    };
+    
+    const handleReset = async () => {
         if (window.confirm('Möchtest du wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
-            storage.clear();
-            window.alert('Daten gelöscht. Bitte lade die Seite neu.');
-            window.location.reload();
+            try {
+                // Delete all naps
+                if (user) {
+                    const { error: napsError } = await supabase
+                        .from('naps')
+                        .delete()
+                        .eq('user_id', user.id);
+                    
+                    if (napsError) {
+                        console.error('Error deleting naps:', napsError);
+                    }
+                }
+                
+                // Delete user stats
+                await storage.clear(user);
+                
+                // Reset weekly naps
+                setWeeklyNaps({});
+                
+                window.alert('Daten gelöscht. Bitte lade die Seite neu.');
+                window.location.reload();
+            } catch (error) {
+                console.error('Error resetting data:', error);
+                window.alert('Fehler beim Löschen der Daten.');
+            }
         }
     };
 
@@ -387,20 +920,22 @@ export default function App() {
                 touchStartY.current = 0;
             }}
         >
-            <div style={{ paddingBottom: '100px', overflowY: 'auto', height: 'calc(100vh - 80px)' }}>
+            <div style={{ paddingBottom: '100px', overflowY: 'auto', height: 'calc(100vh - 80px)', position: 'relative', overflowX: 'hidden' }}>
                 {/* Header */}
                 <div className="p-6 flex justify-between items-center">
                     <div>
                         <h1 className="text-2xl font-bold text-white">Napflow</h1>
                         <p className="text-gray-400">Hallo, {userStats.name || "Schläfer"}</p>
                     </div>
-                    <div className="bg-gray-800 px-4 py-2 rounded-full flex items-center border border-gray-700">
+                    <div className="bg-gray-800 px-4 py-2 rounded-full flex items-center border border-gray-700" key={`xp-display-${statsKey}`}>
                         <Trophy size={16} color="#FACC15" />
                         <span className="text-white font-bold ml-2">{userStats.xp} XP</span>
                     </div>
                 </div>
 
-                {activeTab === 'timer' && (
+                {/* Tab Content Container */}
+                <div>
+                    {activeTab === 'timer' && (
                     <div className="px-6 items-center">
                         <p className={`text-sm uppercase tracking-widest font-bold mb-8 ${currentLevel.color}`}>
                             {currentLevel.name}
@@ -447,7 +982,20 @@ export default function App() {
                                     <RotateCcw size={20} color="gray" />
                                 </button>
                             )}
-                            <button onClick={() => setIsRunning(!isRunning)} className={`p-6 rounded-full ${isRunning ? 'bg-gray-800 border-2 border-red-500' : 'bg-blue-600'}`}>
+                            <button onClick={async () => {
+                                // IMPORTANT: Activate AudioContext on start (uses user interaction)
+                                if (!isRunning) {
+                                    await unlockAudioContext();
+                                    // Ensure timeLeft is valid before starting
+                                    if (timeLeft <= 0) {
+                                        const resetTime = selectedPreset?.duration || totalTime || PRESETS[0].duration;
+                                        console.log('Play button - resetting timeLeft from', timeLeft, 'to', resetTime);
+                                        setTimeLeft(resetTime);
+                                        setTotalTime(resetTime);
+                                    }
+                                }
+                                setIsRunning(!isRunning);
+                            }} className={`p-6 rounded-full ${isRunning ? 'bg-gray-800 border-2 border-red-500' : 'bg-blue-600'}`}>
                                 {isRunning ? <Pause size={32} color="red" /> : <Play size={32} color="white" />}
                             </button>
                         </div>
@@ -618,15 +1166,47 @@ export default function App() {
                                         dayDate.setDate(monday.getDate() + index);
                                         const isPastOrToday = dayDate <= today;
                                         const isToday = dayDate.toDateString() === today.toDateString();
-                                        const hasNap = isPastOrToday && (dayDate.toDateString() === userStats.lastNapDate || Math.random() > 0.7);
-                                        const height = hasNap ? 40 + Math.random() * 20 : 10;
+                                        
+                                        // Get nap count for this day from database
+                                        const dayDateString = dayDate.toISOString().split('T')[0]; // YYYY-MM-DD
+                                        const napCount = weeklyNaps[dayDateString] || 0;
+                                        const hasNap = napCount > 0;
+                                        
+                                        // Calculate height based on nap count (max 3 naps = full height)
+                                        const maxNaps = 3;
+                                        const height = hasNap ? Math.min(60, 20 + (napCount / maxNaps) * 40) : 10;
                                         
                                         return (
                                             <div key={index} className="flex-1 flex flex-col items-center gap-2">
-                                                <div 
-                                                    className={`w-full rounded-t-lg ${hasNap ? 'bg-blue-500' : isToday ? 'bg-gray-600' : 'bg-gray-700'}`}
-                                                    style={{ height: Math.max(10, height), opacity: isPastOrToday ? 1 : 0.3 }}
-                                                />
+                                                <div className="relative w-full" style={{ height: 96 }}>
+                                                    <div 
+                                                        className={`w-full rounded-t-lg ${hasNap ? 'bg-blue-500' : isToday ? 'bg-gray-600' : 'bg-gray-700'}`}
+                                                        style={{ 
+                                                            height: Math.max(10, height), 
+                                                            opacity: isPastOrToday ? 1 : 0.3,
+                                                            position: 'absolute',
+                                                            bottom: 0,
+                                                            width: '100%'
+                                                        }}
+                                                    />
+                                                    {/* Show nap count on top of bar */}
+                                                    {hasNap && (
+                                                        <div 
+                                                            className="absolute"
+                                                            style={{
+                                                                bottom: Math.max(10, height) + 4,
+                                                                left: '50%',
+                                                                transform: 'translateX(-50%)',
+                                                                fontSize: '12px',
+                                                                fontWeight: 'bold',
+                                                                color: '#3B82F6',
+                                                                whiteSpace: 'nowrap'
+                                                            }}
+                                                        >
+                                                            {napCount}
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <span className={`text-xs ${isToday ? 'text-blue-400 font-bold' : 'text-gray-400'}`}>
                                                     {dayLabel}
                                                 </span>
@@ -770,18 +1350,40 @@ export default function App() {
                         {/* Settings */}
                         <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
                             <p className="text-white font-bold text-lg mb-4">Einstellungen</p>
-                            <button 
-                                onClick={handleReset}
-                                className="flex items-center justify-between p-4 bg-red-500/10 border border-red-500/30 rounded-xl w-full"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <X size={20} color="#ef4444" />
-                                    <span className="text-red-500 font-semibold">App zurücksetzen</span>
+                            
+                            {/* User Info */}
+                            {user && (
+                                <div className="mb-4 p-4 bg-gray-700/50 rounded-xl">
+                                    <p className="text-gray-400 text-xs mb-1">E-Mail</p>
+                                    <p className="text-white text-sm">{user.email}</p>
                                 </div>
-                            </button>
+                            )}
+                            
+                            <div className="flex flex-col gap-3">
+                                <button 
+                                    onClick={handleSignOut}
+                                    className="flex items-center justify-between p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl w-full"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <User size={20} color="#3b82f6" />
+                                        <span className="text-blue-400 font-semibold">Abmelden</span>
+                                    </div>
+                                </button>
+                                
+                                <button 
+                                    onClick={handleReset}
+                                    className="flex items-center justify-between p-4 bg-red-500/10 border border-red-500/30 rounded-xl w-full"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <X size={20} color="#ef4444" />
+                                        <span className="text-red-500 font-semibold">App zurücksetzen</span>
+                                    </div>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
+                </div>
             </div>
 
             {/* Tab Bar */}
@@ -798,6 +1400,104 @@ export default function App() {
             </div>
 
             {/* MODALS */}
+            {showAuthModal && (
+                <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50" style={{ padding: 24 }}>
+                    <LinearGradient 
+                        colors={['#0b1224', '#1e1b4b', '#312e81']} 
+                        style={{ width: '100%', maxWidth: 448, borderRadius: 24, padding: 32, border: '1px solid rgba(31, 41, 55, 0.5)' }}
+                    >
+                        {/* Icon */}
+                        <div className="items-center mb-6" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <LinearGradient 
+                                colors={['#6366f1', '#8b5cf6']} 
+                                style={{ width: 80, height: 80, borderRadius: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <Moon size={36} color="#e0e7ff" />
+                            </LinearGradient>
+                        </div>
+
+                        {/* Title */}
+                        <h2 className="text-3xl text-white font-bold text-center mb-2">
+                            {isLoginMode ? 'Willkommen zurück' : 'Registrieren'}
+                        </h2>
+                        <p className="text-gray-400 text-center mb-8">
+                            {isLoginMode ? 'Melde dich an, um fortzufahren' : 'Erstelle ein Konto, um zu starten'}
+                        </p>
+
+                        {/* Error Message */}
+                        {authError && (
+                            <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-6">
+                                <p className="text-red-400 text-sm">{authError}</p>
+                            </div>
+                        )}
+
+                        {/* Email Input */}
+                        <div className="flex items-center bg-gray-800/50 border border-purple-500/30 rounded-xl px-4 py-3 mb-4">
+                            <User size={18} color="#94a3b8" className="mr-3" />
+                            <input 
+                                type="email"
+                                value={email} 
+                                onChange={(e) => setEmail(e.target.value)} 
+                                placeholder="E-Mail" 
+                                className="flex-1 text-white text-base bg-transparent border-none outline-none"
+                                style={{ color: '#94a3b8' }}
+                            />
+                        </div>
+
+                        {/* Password Input */}
+                        <div className="flex items-center bg-gray-800/50 border border-purple-500/30 rounded-xl px-4 py-3 mb-6">
+                            <User size={18} color="#94a3b8" className="mr-3" />
+                            <input 
+                                type="password"
+                                value={password} 
+                                onChange={(e) => setPassword(e.target.value)} 
+                                placeholder="Passwort" 
+                                className="flex-1 text-white text-base bg-transparent border-none outline-none"
+                                style={{ color: '#94a3b8' }}
+                                onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                        isLoginMode ? handleSignIn() : handleSignUp();
+                                    }
+                                }}
+                            />
+                        </div>
+
+                        {/* Action Button */}
+                        <button 
+                            onClick={isLoginMode ? handleSignIn : handleSignUp}
+                            disabled={!email.trim() || !password.trim()}
+                            style={{ opacity: (!email.trim() || !password.trim()) ? 0.5 : 1 }}
+                            className="w-full mb-4"
+                        >
+                            <LinearGradient 
+                                colors={['#3b82f6', '#8b5cf6']} 
+                                style={{ paddingTop: 16, paddingBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}
+                            >
+                                <span className="text-white font-bold text-lg">
+                                    {isLoginMode ? 'Anmelden' : 'Registrieren'}
+                                </span>
+                            </LinearGradient>
+                        </button>
+
+                        {/* Toggle Login/Register */}
+                        <button 
+                            onClick={() => {
+                                setIsLoginMode(!isLoginMode);
+                                setAuthError("");
+                            }}
+                            className="w-full text-center"
+                        >
+                            <span className="text-gray-400 text-sm">
+                                {isLoginMode ? 'Noch kein Konto? ' : 'Bereits ein Konto? '}
+                                <span className="text-blue-400 font-semibold">
+                                    {isLoginMode ? 'Registrieren' : 'Anmelden'}
+                                </span>
+                            </span>
+                        </button>
+                    </LinearGradient>
+                </div>
+            )}
+
             {showOnboarding && (
                 <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50" style={{ padding: 24 }}>
                     <LinearGradient 
