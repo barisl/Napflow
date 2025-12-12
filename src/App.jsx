@@ -14,7 +14,7 @@ const translations = {
             { name: "Schlaf-Gott", minXP: 5000, color: "text-rose-500" },
         ],
         presets: [
-            { id: 'focus', name: 'Power Focus', duration: 20 * 60, icon: Zap, color: 'bg-orange-500', desc: 'Ideal für Konzentration' },
+            { id: 'focus', name: 'Power Focus', duration: 27 * 60, icon: Zap, color: 'bg-orange-500', desc: 'Ideal für Konzentration' },
             { id: 'refresh', name: 'Quick Refresh', duration: 15 * 60, icon: Wind, color: 'bg-blue-400', desc: 'Kurz & knackig' },
             { id: 'recharge', name: 'Deep Recharge', duration: 90 * 60, icon: Battery, color: 'bg-indigo-500', desc: 'Voller Schlafzyklus' },
         ],
@@ -43,7 +43,7 @@ const translations = {
             settings: "Einstellungen",
             email: "E-Mail",
             logout: "Abmelden",
-            resetApp: "App zurücksetzen",
+            logoutConfirm: "Möchtest du dich wirklich abmelden?",
             language: "Sprache",
             german: "Deutsch",
             english: "English",
@@ -76,6 +76,7 @@ const translations = {
             average: "Durchschnitt",
             minPerNap: "Min pro Nap",
             startFirstNap: "Starte deinen ersten Nap!",
+            startFirstNapFull: "Starte deinen ersten Nap und beginne deine Reise zu mehr Energie! 💪",
             onRightTrack: "Du bist auf dem richtigen Weg!",
             moreNaps: "weitere Naps bis zu deinem ersten Meilenstein!",
             great: "Großartig!",
@@ -132,7 +133,7 @@ const translations = {
             settings: "Settings",
             email: "E-Mail",
             logout: "Logout",
-            resetApp: "Reset App",
+            logoutConfirm: "Do you really want to log out?",
             language: "Language",
             german: "Deutsch",
             english: "English",
@@ -165,6 +166,7 @@ const translations = {
             average: "Average",
             minPerNap: "Min per nap",
             startFirstNap: "Start your first nap!",
+            startFirstNapFull: "Start your first nap and begin your journey to more energy! 💪",
             onRightTrack: "You're on the right track!",
             moreNaps: "more naps until your first milestone!",
             great: "Great!",
@@ -312,7 +314,6 @@ const unlockAudioContext = async () => {
         
         if (alarmAudioContext.state === 'suspended') {
             await alarmAudioContext.resume();
-            console.log('AudioContext activated');
         }
         
         // Very short, almost silent "Unlock" sound to activate AudioContext
@@ -341,7 +342,6 @@ const playAlarmSound = async () => {
         // IMPORTANT: Activate AudioContext if suspended (wait asynchronously!)
         if (alarmAudioContext.state === 'suspended') {
             await alarmAudioContext.resume();
-            console.log('AudioContext resumed for alarm');
         }
         
         // Stop previous oscillator if exists
@@ -436,7 +436,6 @@ const LinearGradient = ({ colors, children, style, start, end, ...props }) => {
 };
 
 export default function App() {
-    console.log('App component rendering...');
     const [activeTab, setActiveTab] = useState('timer');
     const [timeLeft, setTimeLeft] = useState(20 * 60);
     const [totalTime, setTotalTime] = useState(20 * 60);
@@ -482,6 +481,8 @@ export default function App() {
 
     // Check auth session on mount
     useEffect(() => {
+        let timeoutId;
+        
         const checkSession = async () => {
             try {
                 // Get existing session from storage
@@ -489,33 +490,49 @@ export default function App() {
                 
                 if (error) {
                     console.error('Error getting session:', error);
+                    setShowAuthModal(true);
+                    setIsLoaded(true);
+                    setAuthLoading(false);
+                    return;
                 }
                 
                 if (session) {
-                    console.log('Session found, user:', session.user.email);
                     setSession(session);
                     setUser(session.user);
                     setShowAuthModal(false);
                     // Load user data
                     await loadUserData(session.user);
                 } else {
-                    console.log('No session found');
                     setShowAuthModal(true);
+                    setIsLoaded(true);
                 }
             } catch (error) {
                 console.error('Error checking session:', error);
                 setShowAuthModal(true);
+                setIsLoaded(true);
             } finally {
                 setAuthLoading(false);
+                if (timeoutId) clearTimeout(timeoutId);
             }
         };
         
         checkSession();
         
+        // Fallback: If auth check takes too long, set loaded anyway
+        timeoutId = setTimeout(() => {
+            if (!isLoaded) {
+                setIsLoaded(true);
+                setAuthLoading(false);
+            }
+        }, 5000); // 5 second timeout
+        
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+        };
+        
         // Listen for auth changes (login, logout, token refresh)
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
-                console.log('Auth state changed:', event, session?.user?.email);
                 setSession(session);
                 setUser(session?.user ?? null);
                 
@@ -584,7 +601,7 @@ export default function App() {
     const loadUserData = async (currentUser) => {
         // Don't overwrite if stats are being updated
         if (isUpdatingStatsRef.current) {
-            console.log('loadUserData - skipping, stats are being updated');
+            setIsLoaded(true); // Still set loaded even if skipping
             return;
         }
         
@@ -593,10 +610,14 @@ export default function App() {
             if (jsonValue != null) {
                 const parsed = typeof jsonValue === 'string' ? JSON.parse(jsonValue) : jsonValue;
                 setUserStats(parsed);
-                if (!parsed.name || parsed.name === "") {
+                // Only show onboarding if name is empty (first time setup)
+                if (!parsed.name || parsed.name.trim() === "") {
                     setShowOnboarding(true);
+                } else {
+                    setShowOnboarding(false);
                 }
             } else {
+                // No data found - first time user, show onboarding
                 setShowOnboarding(true);
             }
             
@@ -629,18 +650,20 @@ export default function App() {
         }
     };
     
-    // Initialize after auth
+    // Initialize after auth - ensure isLoaded is set
     useEffect(() => {
-        const init = async () => {
-            if (!authLoading && user) {
+        if (!authLoading) {
+            if (user) {
                 // Request notifications
-                await requestNotificationPermission();
-                await loadUserData(user);
-            } else if (!authLoading && !user) {
+                requestNotificationPermission().catch(err => console.error('Notification permission error:', err));
+                loadUserData(user).catch(err => {
+                    console.error('Error in loadUserData:', err);
+                    setIsLoaded(true); // Ensure loaded even on error
+                });
+            } else {
                 setIsLoaded(true);
             }
-        };
-        init();
+        }
     }, [authLoading, user]);
     
     // Reload weekly naps when user changes
@@ -719,7 +742,6 @@ export default function App() {
 
     // Define handleAlarm before useEffect that uses it
     const handleAlarm = useCallback(async () => {
-        console.log('Alarm triggered!');
         setIsRunning(false);
         
         // Show modal immediately
@@ -734,7 +756,6 @@ export default function App() {
         
         // Request notification permission and show notification asynchronously
         requestNotificationPermission().then(permission => {
-            console.log('Notification permission:', permission);
             if (permission === 'granted') {
                 showNotification("Aufwachen!", "Dein Nap ist vorbei.");
             }
@@ -749,11 +770,9 @@ export default function App() {
         // Function for continuous alarm
         const sendAlarmNotification = async () => {
             if (!isAlarmActiveRef.current) {
-                console.log('Alarm stopped - not playing sound');
                 return;
             }
             try {
-                console.log('Playing alarm sound...');
                 await playAlarmSound();
                 
                 // Only first notification with text, then silent
@@ -868,7 +887,6 @@ export default function App() {
         const minutes = Math.floor(originalDurationSeconds / 60);
         const xpEarned = minutes * 5;
         
-        console.log('finishNap - originalDurationSeconds:', originalDurationSeconds, 'minutes:', minutes, 'xpEarned:', xpEarned, 'selectedPreset:', selectedPreset);
         
         // Save nap to database
         if (user) {
@@ -909,19 +927,11 @@ export default function App() {
                 lastNapDate: todayString
             };
             
-            console.log('finishNap - State update:', {
-                oldXP: prev.xp,
-                xpEarned: xpEarned,
-                newXP: newXP,
-                newStats: newStats
-            });
-            
             // Save to Supabase asynchronously (don't block)
             if (user) {
                 setTimeout(() => {
                     storage.setItem('@napflow_data_final_v2', JSON.stringify(newStats), user)
                         .then(() => {
-                            console.log('finishNap - saved to Supabase');
                             // Allow loadUserData after save is complete
                             setTimeout(() => {
                                 isUpdatingStatsRef.current = false;
@@ -944,7 +954,6 @@ export default function App() {
         // Reset timer and stop running - ensure totalTime is valid
         // Always use selectedPreset.duration for reset, as it's the original duration
         const resetTime = selectedPreset?.duration || totalTime || PRESETS[0].duration;
-        console.log('finishNap - resetting timer to:', resetTime, 'selectedPreset:', selectedPreset);
         setTimeLeft(resetTime);
         setTotalTime(resetTime);
         setIsRunning(false);
@@ -982,14 +991,14 @@ export default function App() {
             if (error) throw error;
             
             if (data.user) {
-                console.log('Sign up successful');
                 // Note: Supabase may require email confirmation
                 // If email confirmation is enabled, session might be null initially
                 if (data.session) {
                     setSession(data.session);
                     setUser(data.user);
                     setShowAuthModal(false);
-                    setShowOnboarding(true);
+                    // Don't set showOnboarding here - let loadUserData decide based on whether name exists
+                    // loadUserData will be called by the auth state change listener
                 } else {
                     // Email confirmation required
                     setAuthError('Bitte bestätige deine E-Mail-Adresse. Prüfe dein Postfach.');
@@ -1015,7 +1024,6 @@ export default function App() {
             if (error) throw error;
             
             if (data.user && data.session) {
-                console.log('Login successful, session saved');
                 setSession(data.session);
                 setUser(data.user);
                 setShowAuthModal(false);
@@ -1030,46 +1038,36 @@ export default function App() {
     };
     
     const handleSignOut = async () => {
-        await supabase.auth.signOut();
-        setUserStats({
-            name: "", xp: 0, totalNaps: 0, totalMinutes: 0, currentStreak: 0, lastNapDate: null
-        });
-    };
-    
-    const handleReset = async () => {
-        if (window.confirm(language === 'en' ? 'Do you really want to delete all data? This action cannot be undone.' : 'Möchtest du wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
-            try {
-                // Delete all naps
-                if (user) {
-                    const { error: napsError } = await supabase
-                        .from('naps')
-                        .delete()
-                        .eq('user_id', user.id);
-                    
-                    if (napsError) {
-                        console.error('Error deleting naps:', napsError);
-                    }
-                }
-                
-                // Delete user stats
-                await storage.clear(user);
-                
-                // Reset weekly naps
-                setWeeklyNaps({});
-                
-                window.alert(language === 'en' ? 'Data deleted. Please reload the page.' : 'Daten gelöscht. Bitte lade die Seite neu.');
-                window.location.reload();
-            } catch (error) {
-                console.error('Error resetting data:', error);
-                window.alert(language === 'en' ? 'Error deleting data.' : 'Fehler beim Löschen der Daten.');
-            }
+        // Ask for confirmation first
+        if (!window.confirm(t.ui.logoutConfirm)) {
+            return; // User cancelled
+        }
+        
+        try {
+            await supabase.auth.signOut();
+            // Reset user stats
+            setUserStats({
+                name: "", xp: 0, totalNaps: 0, totalMinutes: 0, currentStreak: 0, lastNapDate: null
+            });
+            // Clear weekly naps
+            setWeeklyNaps({});
+            // Clear user and session
+            setUser(null);
+            setSession(null);
+            // Show auth modal (login/register screen)
+            setShowAuthModal(true);
+            // Reset auth error
+            setAuthError("");
+        } catch (error) {
+            console.error('Error signing out:', error);
         }
     };
 
+    
     if (!isLoaded) {
         return (
             <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#111827', color: 'white' }}>
-                <p>Lädt...</p>
+                <p>Lädt... (isLoaded: {isLoaded ? 'true' : 'false'}, authLoading: {authLoading ? 'true' : 'false'})</p>
             </div>
         );
     }
@@ -1186,7 +1184,6 @@ export default function App() {
                                     // Ensure timeLeft is valid before starting
                                     if (timeLeft <= 0) {
                                         const resetTime = selectedPreset?.duration || totalTime || currentPresets[0].duration;
-                                        console.log('Play button - resetting timeLeft from', timeLeft, 'to', resetTime);
                                         setTimeLeft(resetTime);
                                         setTotalTime(resetTime);
                                     }
@@ -1326,7 +1323,7 @@ export default function App() {
                             </div>
                             {userStats.totalNaps === 0 ? (
                                 <p className="text-gray-300">
-                                    Starte deinen ersten Nap und beginne deine Reise zu mehr Energie! 💪
+                                    {t.ui.startFirstNapFull}
                                 </p>
                             ) : userStats.totalNaps < 5 ? (
                                 <p className="text-gray-300">
@@ -1334,7 +1331,7 @@ export default function App() {
                                 </p>
                             ) : userStats.currentStreak >= 7 ? (
                                 <p className="text-gray-300">
-                                    Wow! {userStats.currentStreak} Tage Streak - du bist ein wahrer Nap-Meister! 🔥
+                                    {t.ui.wow} {userStats.currentStreak} {t.ui.trueNapMaster} 🔥
                                 </p>
                             ) : (
                                 <p className="text-gray-300">
@@ -1589,21 +1586,11 @@ export default function App() {
                                 
                                 <button 
                                     onClick={handleSignOut}
-                                    className="flex items-center justify-between p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl w-full"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <User size={20} color="#3b82f6" />
-                                        <span className="text-blue-400 font-semibold">{t.ui.logout}</span>
-                                    </div>
-                                </button>
-                                
-                                <button 
-                                    onClick={handleReset}
                                     className="flex items-center justify-between p-4 bg-red-500/10 border border-red-500/30 rounded-xl w-full"
                                 >
                                     <div className="flex items-center gap-3">
-                                        <X size={20} color="#ef4444" />
-                                        <span className="text-red-500 font-semibold">{t.ui.resetApp}</span>
+                                        <User size={20} color="#ef4444" />
+                                        <span className="text-red-400 font-semibold">{t.ui.logout}</span>
                                     </div>
                                 </button>
                             </div>
@@ -1760,9 +1747,18 @@ export default function App() {
 
                         {/* Button */}
                         <button 
-                            onClick={() => { 
-                                if(tempName.trim()) { 
-                                    setUserStats({...userStats, name: tempName}); 
+                            onClick={async () => { 
+                                if(tempName.trim() && user) { 
+                                    const updatedStats = {...userStats, name: tempName.trim()};
+                                    setUserStats(updatedStats);
+                                    
+                                    // Save to Supabase immediately
+                                    try {
+                                        await storage.setItem('@napflow_data_final_v2', JSON.stringify(updatedStats), user);
+                                    } catch (error) {
+                                        console.error('Error saving name:', error);
+                                    }
+                                    
                                     setShowOnboarding(false); 
                                 }
                             }} 
