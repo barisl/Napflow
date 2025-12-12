@@ -465,6 +465,7 @@ export default function App() {
     const [authError, setAuthError] = useState("");
     const alarmTimeoutsRef = useRef([]);
     const isAlarmActiveRef = useRef(false);
+    const hasAlarmTriggeredRef = useRef(false);
     const customTimeIntervalRef = useRef(null);
     const customTimePressTimeoutRef = useRef(null);
     
@@ -736,6 +737,12 @@ export default function App() {
 
     // Define handleAlarm before useEffect that uses it
     const handleAlarm = useCallback(async () => {
+        // Prevent multiple calls
+        if (hasAlarmTriggeredRef.current) {
+            return;
+        }
+        hasAlarmTriggeredRef.current = true;
+        
         setIsRunning(false);
         
         // Show modal immediately
@@ -748,20 +755,20 @@ export default function App() {
             console.error('Error unlocking audio context:', error);
         }
         
-        // Request notification permission and show notification asynchronously
+        // Request notification permission and show notification ONCE
         requestNotificationPermission().then(permission => {
             if (permission === 'granted') {
-                showNotification("Aufwachen!", "Dein Nap ist vorbei.");
+                showNotification(t.ui.wakeUp, t.ui.napFinished);
             }
         }).catch(error => {
             console.error('Error requesting notification permission:', error);
         });
         
-        // Continuous alarm sound and notifications
+        // Continuous alarm sound (no more notifications after the first one)
         alarmTimeoutsRef.current = [];
         isAlarmActiveRef.current = true;
         
-        // Function for continuous alarm
+        // Function for continuous alarm sound only (no notifications)
         const sendAlarmNotification = async () => {
             if (!isAlarmActiveRef.current) {
                 return;
@@ -769,10 +776,7 @@ export default function App() {
             try {
                 await playAlarmSound();
                 
-                // Only first notification with text, then silent
-                if (Notification.permission === 'granted') {
-                    showNotification("", "");
-                }
+                // No notification here - only sound
                 
                 // Next sound after 1.4 seconds (sound lasts 0.8s, then 0.6s pause)
                 const timeoutId = setTimeout(() => {
@@ -781,7 +785,7 @@ export default function App() {
                 alarmTimeoutsRef.current.push(timeoutId);
             } catch (error) {
                 console.error('Error sending alarm notification:', error);
-                // Trotzdem weitermachen
+                // Continue anyway
                 if (isAlarmActiveRef.current) {
                     const timeoutId = setTimeout(() => {
                         sendAlarmNotification();
@@ -791,13 +795,15 @@ export default function App() {
             }
         };
         
-        // Starte kontinuierlichen Alarm sofort (kein doppelter initialer Sound)
+        // Start continuous alarm sound immediately
         sendAlarmNotification();
     }, []);
 
     useEffect(() => {
         let interval = null;
         if (isRunning && timeLeft > 0) {
+            // Reset alarm trigger flag when starting a new timer
+            hasAlarmTriggeredRef.current = false;
             isAlarmActiveRef.current = false;
             alarmTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
             alarmTimeoutsRef.current = [];
@@ -813,8 +819,8 @@ export default function App() {
                     return newTime;
                 });
             }, 1000);
-        } else if (timeLeft === 0 && isRunning) {
-            // Fallback: if timer is already at 0 and running, trigger alarm
+        } else if (timeLeft === 0 && isRunning && !hasAlarmTriggeredRef.current) {
+            // Fallback: if timer is already at 0 and running, trigger alarm (only if not already triggered)
             handleAlarm();
         }
         return () => {
@@ -859,6 +865,7 @@ export default function App() {
 
     const finishNap = async () => {
         isAlarmActiveRef.current = false;
+        hasAlarmTriggeredRef.current = false; // Reset for next nap
         alarmTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
         alarmTimeoutsRef.current = [];
         stopAlarmSound();
