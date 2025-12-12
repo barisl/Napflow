@@ -101,7 +101,7 @@ const translations = {
             { name: "Sleep God", minXP: 5000, color: "text-rose-500" },
         ],
         presets: [
-            { id: 'focus', name: 'Power Focus', duration: 27 * 60, icon: Zap, color: 'bg-orange-500', desc: 'Ideal for concentration' },
+            { id: 'focus', name: 'Power Focus', duration: 20 * 60, icon: Zap, color: 'bg-orange-500', desc: 'Ideal for concentration' },
             { id: 'refresh', name: 'Quick Refresh', duration: 15 * 60, icon: Wind, color: 'bg-blue-400', desc: 'Short & crisp' },
             { id: 'recharge', name: 'Deep Recharge', duration: 90 * 60, icon: Battery, color: 'bg-indigo-500', desc: 'Full sleep cycle' },
         ],
@@ -431,8 +431,8 @@ const LinearGradient = ({ colors, children, style, start, end, ...props }) => {
 
 export default function App() {
     const [activeTab, setActiveTab] = useState('timer');
-    const [timeLeft, setTimeLeft] = useState(27 * 60);
-    const [totalTime, setTotalTime] = useState(27 * 60);
+    const [timeLeft, setTimeLeft] = useState(20 * 60);
+    const [totalTime, setTotalTime] = useState(20 * 60);
     const [isRunning, setIsRunning] = useState(false);
     const [selectedPreset, setSelectedPreset] = useState(PRESETS[0]);
     const [showCompleteModal, setShowCompleteModal] = useState(false);
