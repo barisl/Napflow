@@ -1,22 +1,193 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './index.css';
-import { Play, Pause, Trophy, Activity, Moon, Battery, Zap, Wind, CheckCircle, Flame, Clock, Plus, Minus, X, User, RotateCcw, Star, Award, Target, TrendingUp, Calendar, BarChart3, Sparkles } from 'lucide-react';
+import { Play, Pause, Trophy, Activity, Moon, Battery, Zap, Wind, CheckCircle, Flame, Clock, Plus, Minus, X, User, RotateCcw, Star, Award, Target, TrendingUp, Calendar, BarChart3, Sparkles, Globe } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
-// Data
-const LEVELS = [
-    { name: "Schlafwandler", minXP: 0, color: "text-gray-400" },
-    { name: "Novize", minXP: 100, color: "text-blue-400" },
-    { name: "Meister", minXP: 500, color: "text-green-400" },
-    { name: "Traum-Reisender", minXP: 1500, color: "text-purple-400" },
-    { name: "Schlaf-Gott", minXP: 5000, color: "text-rose-500" },
-];
+// Translations
+const translations = {
+    de: {
+        levels: [
+            { name: "Schlafwandler", minXP: 0, color: "text-gray-400" },
+            { name: "Novize", minXP: 100, color: "text-blue-400" },
+            { name: "Meister", minXP: 500, color: "text-green-400" },
+            { name: "Traum-Reisender", minXP: 1500, color: "text-purple-400" },
+            { name: "Schlaf-Gott", minXP: 5000, color: "text-rose-500" },
+        ],
+        presets: [
+            { id: 'focus', name: 'Power Focus', duration: 20 * 60, icon: Zap, color: 'bg-orange-500', desc: 'Ideal für Konzentration' },
+            { id: 'refresh', name: 'Quick Refresh', duration: 15 * 60, icon: Wind, color: 'bg-blue-400', desc: 'Kurz & knackig' },
+            { id: 'recharge', name: 'Deep Recharge', duration: 90 * 60, icon: Battery, color: 'bg-indigo-500', desc: 'Voller Schlafzyklus' },
+        ],
+        ui: {
+            hello: "Hallo",
+            sleeper: "Schläfer",
+            ready: "Bereit",
+            goodNight: "Gute Nacht...",
+            xpCollect: "XP Einsammeln",
+            goodMorning: "Guten Morgen!",
+            energyRestored: "Energielevel wiederhergestellt.",
+            yourStats: "Deine Statistik",
+            statsOverview: "Übersicht deiner Nap-Performance",
+            daysStreak: "Tage Streak",
+            active: "Aktiv",
+            totalNaps: "Naps Gesamt",
+            sleptTime: "Geschlafene Zeit",
+            hours: "Stunden",
+            thisWeek: "Diese Woche",
+            napsPerDay: "Naps pro Tag (diese Woche)",
+            levelProgress: "Level Fortschritt",
+            maxLevelReached: "🎉 Maximales Level erreicht!",
+            xpUntil: "XP bis",
+            achievements: "Erfolge",
+            firstNap: "Erster Nap",
+            settings: "Einstellungen",
+            email: "E-Mail",
+            logout: "Abmelden",
+            resetApp: "App zurücksetzen",
+            language: "Sprache",
+            german: "Deutsch",
+            english: "English",
+            selectTime: "Zeit wählen",
+            minutes: "Minuten",
+            ok: "OK",
+            cancel: "Abbrechen",
+            customTime: "Eigene Zeit",
+            reset: "Zurücksetzen",
+            yourName: "Dein Name",
+            enterName: "Gib deinen Namen ein",
+            continue: "Weiter",
+            login: "Anmelden",
+            register: "Registrieren",
+            password: "Passwort",
+            noAccount: "Noch kein Account?",
+            hasAccount: "Bereits ein Account?",
+            loginError: "Fehler beim Anmelden",
+            registerError: "Fehler beim Registrieren",
+            wakeUp: "Aufwachen!",
+            napFinished: "Dein Nap ist vorbei.",
+            hello: "Hallo",
+            welcome: "Willkommen",
+            welcomeBack: "Willkommen zurück",
+            createAccount: "Erstelle ein Konto, um zu starten",
+            continueWith: "Melde dich an, um fortzufahren",
+            howCanWeCallYou: "Wie dürfen wir dich nennen?",
+            days: "Tage",
+            total: "Gesamt",
+            average: "Durchschnitt",
+            minPerNap: "Min pro Nap",
+            startFirstNap: "Starte deinen ersten Nap!",
+            onRightTrack: "Du bist auf dem richtigen Weg!",
+            moreNaps: "weitere Naps bis zu deinem ersten Meilenstein!",
+            great: "Großartig!",
+            napsMade: "Naps gemacht. Weiter so!",
+            wow: "Wow!",
+            trueNapMaster: "Tage Streak - du bist ein wahrer Nap-Meister!",
+            longestStreak: "Längster Streak",
+            napsThisWeek: "Naps diese Woche",
+            totalXP: "Gesamt XP",
+            yourProgress: "Dein Fortschritt",
+            bestAchievements: "Bestleistungen",
+            firstNapAchievement: "Erster Nap",
+            sevenDayStreak: "7-Tage Streak",
+            fiftyNaps: "50 Naps",
+            maxLevelReached: "🎉 Maximales Level erreicht!",
+            xpUntil: "XP bis",
+        }
+    },
+    en: {
+        levels: [
+            { name: "Sleepwalker", minXP: 0, color: "text-gray-400" },
+            { name: "Novice", minXP: 100, color: "text-blue-400" },
+            { name: "Master", minXP: 500, color: "text-green-400" },
+            { name: "Dream Traveler", minXP: 1500, color: "text-purple-400" },
+            { name: "Sleep God", minXP: 5000, color: "text-rose-500" },
+        ],
+        presets: [
+            { id: 'focus', name: 'Power Focus', duration: 20 * 60, icon: Zap, color: 'bg-orange-500', desc: 'Ideal for concentration' },
+            { id: 'refresh', name: 'Quick Refresh', duration: 15 * 60, icon: Wind, color: 'bg-blue-400', desc: 'Short & crisp' },
+            { id: 'recharge', name: 'Deep Recharge', duration: 90 * 60, icon: Battery, color: 'bg-indigo-500', desc: 'Full sleep cycle' },
+        ],
+        ui: {
+            hello: "Hello",
+            sleeper: "Sleeper",
+            ready: "Ready",
+            goodNight: "Good night...",
+            xpCollect: "Collect XP",
+            goodMorning: "Good Morning!",
+            energyRestored: "Energy level restored.",
+            yourStats: "Your Statistics",
+            statsOverview: "Overview of your nap performance",
+            daysStreak: "Days Streak",
+            active: "Active",
+            totalNaps: "Total Naps",
+            sleptTime: "Slept Time",
+            hours: "Hours",
+            thisWeek: "This Week",
+            napsPerDay: "Naps per day (this week)",
+            levelProgress: "Level Progress",
+            maxLevelReached: "🎉 Maximum level reached!",
+            xpUntil: "XP until",
+            achievements: "Achievements",
+            firstNap: "First Nap",
+            settings: "Settings",
+            email: "E-Mail",
+            logout: "Logout",
+            resetApp: "Reset App",
+            language: "Language",
+            german: "Deutsch",
+            english: "English",
+            selectTime: "Select Time",
+            minutes: "Minutes",
+            ok: "OK",
+            cancel: "Cancel",
+            customTime: "Custom Time",
+            reset: "Reset",
+            yourName: "Your Name",
+            enterName: "Enter your name",
+            continue: "Continue",
+            login: "Login",
+            register: "Register",
+            password: "Password",
+            noAccount: "No account yet?",
+            hasAccount: "Already have an account?",
+            loginError: "Login error",
+            registerError: "Registration error",
+            wakeUp: "Wake up!",
+            napFinished: "Your nap is over.",
+            hello: "Hello",
+            welcome: "Welcome",
+            welcomeBack: "Welcome back",
+            createAccount: "Create an account to get started",
+            continueWith: "Sign in to continue",
+            howCanWeCallYou: "What should we call you?",
+            days: "Days",
+            total: "Total",
+            average: "Average",
+            minPerNap: "Min per nap",
+            startFirstNap: "Start your first nap!",
+            onRightTrack: "You're on the right track!",
+            moreNaps: "more naps until your first milestone!",
+            great: "Great!",
+            napsMade: "naps made. Keep it up!",
+            wow: "Wow!",
+            trueNapMaster: "Days Streak - you're a true nap master!",
+            longestStreak: "Longest Streak",
+            napsThisWeek: "Naps this week",
+            totalXP: "Total XP",
+            yourProgress: "Your Progress",
+            bestAchievements: "Best Achievements",
+            firstNapAchievement: "First Nap",
+            sevenDayStreak: "7-Day Streak",
+            fiftyNaps: "50 Naps",
+            maxLevelReached: "🎉 Maximum level reached!",
+            xpUntil: "XP until",
+        }
+    }
+};
 
-const PRESETS = [
-    { id: 'focus', name: 'Power Focus', duration: 20 * 60, icon: Zap, color: 'bg-orange-500', desc: 'Ideal für Konzentration' },
-    { id: 'refresh', name: 'Quick Refresh', duration: 15 * 60, icon: Wind, color: 'bg-blue-400', desc: 'Kurz & knackig' },
-    { id: 'recharge', name: 'Deep Recharge', duration: 90 * 60, icon: Battery, color: 'bg-indigo-500', desc: 'Voller Schlafzyklus' },
-];
+// Default data (will be replaced by translations based on language)
+const LEVELS = translations.de.levels;
+const PRESETS = translations.de.presets;
 
 // Helper function to get authenticated user ID
 const getUserId = (user) => {
@@ -283,6 +454,12 @@ export default function App() {
     const [weeklyNaps, setWeeklyNaps] = useState({}); // { '2024-01-15': 2, '2024-01-16': 1, ... }
     const [isLoaded, setIsLoaded] = useState(false);
     const isUpdatingStatsRef = useRef(false); // Prevent loadUserData from overwriting updates
+    const [language, setLanguage] = useState('de'); // 'de' or 'en'
+    
+    // Get current translations
+    const t = translations[language] || translations.de;
+    const currentLevels = t.levels;
+    const currentPresets = t.presets;
     
     // Auth state
     const [user, setUser] = useState(null);
@@ -422,6 +599,14 @@ export default function App() {
             } else {
                 setShowOnboarding(true);
             }
+            
+            // Load language preference
+            const langValue = await storage.getItem('@napflow_language', currentUser);
+            if (langValue) {
+                const lang = typeof langValue === 'string' ? JSON.parse(langValue) : langValue;
+                setLanguage(lang === 'en' ? 'en' : 'de');
+            }
+            
             // Load weekly naps
             await loadWeeklyNaps(currentUser);
             setIsLoaded(true);
@@ -429,6 +614,18 @@ export default function App() {
             console.error('Error loading user data:', e);
             setShowOnboarding(true);
             setIsLoaded(true);
+        }
+    };
+    
+    // Handle language change
+    const handleLanguageChange = async (newLang) => {
+        setLanguage(newLang);
+        if (user) {
+            try {
+                await storage.setItem('@napflow_language', JSON.stringify(newLang), user);
+            } catch (error) {
+                console.error('Error saving language preference:', error);
+            }
         }
     };
     
@@ -754,8 +951,8 @@ export default function App() {
         setShowCompleteModal(false);
     };
 
-    const currentLevel = LEVELS.slice().reverse().find(l => userStats.xp >= l.minXP) || LEVELS[0];
-    const nextLevel = LEVELS.find(l => l.minXP > userStats.xp);
+    const currentLevel = currentLevels.slice().reverse().find(l => userStats.xp >= l.minXP) || currentLevels[0];
+    const nextLevel = currentLevels.find(l => l.minXP > userStats.xp);
     const isMaxLevel = !nextLevel;
     const xpForNextLevel = nextLevel ? nextLevel.minXP - userStats.xp : 0;
     const xpInCurrentLevel = userStats.xp - currentLevel.minXP;
@@ -803,7 +1000,7 @@ export default function App() {
             }
         } catch (error) {
             console.error('Sign up error:', error);
-            setAuthError(error.message || 'Fehler beim Registrieren');
+            setAuthError(error.message || t.ui.registerError);
         }
     };
     
@@ -828,7 +1025,7 @@ export default function App() {
             }
         } catch (error) {
             console.error('Login error:', error);
-            setAuthError(error.message || 'Fehler beim Anmelden');
+            setAuthError(error.message || t.ui.loginError);
         }
     };
     
@@ -840,7 +1037,7 @@ export default function App() {
     };
     
     const handleReset = async () => {
-        if (window.confirm('Möchtest du wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+        if (window.confirm(language === 'en' ? 'Do you really want to delete all data? This action cannot be undone.' : 'Möchtest du wirklich alle Daten löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
             try {
                 // Delete all naps
                 if (user) {
@@ -860,11 +1057,11 @@ export default function App() {
                 // Reset weekly naps
                 setWeeklyNaps({});
                 
-                window.alert('Daten gelöscht. Bitte lade die Seite neu.');
+                window.alert(language === 'en' ? 'Data deleted. Please reload the page.' : 'Daten gelöscht. Bitte lade die Seite neu.');
                 window.location.reload();
             } catch (error) {
                 console.error('Error resetting data:', error);
-                window.alert('Fehler beim Löschen der Daten.');
+                window.alert(language === 'en' ? 'Error deleting data.' : 'Fehler beim Löschen der Daten.');
             }
         }
     };
@@ -925,7 +1122,7 @@ export default function App() {
                 <div className="p-6 flex justify-between items-center">
                     <div>
                         <h1 className="text-2xl font-bold text-white">Napflow</h1>
-                        <p className="text-gray-400">Hallo, {userStats.name || "Schläfer"}</p>
+                        <p className="text-gray-400">{t.ui.hello}, {userStats.name || t.ui.sleeper}</p>
                     </div>
                     <div className="bg-gray-800 px-4 py-2 rounded-full flex items-center border border-gray-700" key={`xp-display-${statsKey}`}>
                         <Trophy size={16} color="#FACC15" />
@@ -971,7 +1168,7 @@ export default function App() {
                                 <span className="text-6xl font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
                                     {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:{(timeLeft % 60).toString().padStart(2, '0')}
                                 </span>
-                                <p className="text-gray-400 mt-2">{isRunning ? 'Gute Nacht...' : 'Bereit'}</p>
+                                <p className="text-gray-400 mt-2">{isRunning ? t.ui.goodNight : t.ui.ready}</p>
                             </div>
                         </div>
 
@@ -988,7 +1185,7 @@ export default function App() {
                                     await unlockAudioContext();
                                     // Ensure timeLeft is valid before starting
                                     if (timeLeft <= 0) {
-                                        const resetTime = selectedPreset?.duration || totalTime || PRESETS[0].duration;
+                                        const resetTime = selectedPreset?.duration || totalTime || currentPresets[0].duration;
                                         console.log('Play button - resetting timeLeft from', timeLeft, 'to', resetTime);
                                         setTimeLeft(resetTime);
                                         setTotalTime(resetTime);
@@ -1002,7 +1199,7 @@ export default function App() {
 
                         {/* Presets */}
                         <div className="w-full gap-3" style={{ display: 'flex', flexDirection: 'column' }}>
-                            {PRESETS.map(p => {
+                            {currentPresets.map(p => {
                                 const IconComponent = p.icon;
                                 return (
                                     <button 
@@ -1021,7 +1218,7 @@ export default function App() {
                             })}
                             <button onClick={() => setShowCustomModal(true)} className="flex items-center p-4 rounded-xl bg-gray-800 border border-transparent">
                                 <div className="p-3 rounded-lg bg-pink-500"><Clock size={20} color="white" /></div>
-                                <span className="ml-4 text-white font-bold">Eigene Zeit</span>
+                                <span className="ml-4 text-white font-bold">{t.ui.customTime}</span>
                             </button>
                         </div>
                     </div>
@@ -1029,8 +1226,8 @@ export default function App() {
 
                 {activeTab === 'stats' && (
                     <div className="px-6 py-4">
-                        <h2 className="text-3xl font-bold text-white mb-2">Deine Statistik</h2>
-                        <p className="text-gray-400 mb-6">Übersicht deiner Nap-Performance</p>
+                        <h2 className="text-3xl font-bold text-white mb-2">{t.ui.yourStats}</h2>
+                        <p className="text-gray-400 mb-6">{t.ui.statsOverview}</p>
 
                         {/* Hauptstatistiken Grid */}
                         <div className="flex gap-3 mb-4">
@@ -1040,11 +1237,11 @@ export default function App() {
                             >
                                 <Flame size={20} color="orange" />
                                 <p className="text-3xl font-bold text-white mt-2">{userStats.currentStreak}</p>
-                                <p className="text-gray-400 text-xs">Tage Streak</p>
+                                <p className="text-gray-400 text-xs">{t.ui.daysStreak}</p>
                                 {userStats.currentStreak > 0 && (
                                     <div className="flex items-center gap-1 mt-1">
                                         <TrendingUp size={12} color="#22c55e" />
-                                        <span className="text-green-400 text-xs">Aktiv</span>
+                                        <span className="text-green-400 text-xs">{t.ui.active}</span>
                                     </div>
                                 )}
                             </LinearGradient>
@@ -1055,7 +1252,7 @@ export default function App() {
                             >
                                 <Moon size={20} color="#3B82F6" />
                                 <p className="text-3xl font-bold text-white mt-2">{userStats.totalNaps}</p>
-                                <p className="text-gray-400 text-xs">Naps Gesamt</p>
+                                <p className="text-gray-400 text-xs">{t.ui.totalNaps}</p>
                                 <span className="text-blue-400 text-xs mt-1">
                                     Ø {userStats.totalNaps > 0 ? Math.round(userStats.totalMinutes / userStats.totalNaps) : 0} Min
                                 </span>
@@ -1070,18 +1267,18 @@ export default function App() {
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
                                     <Clock size={22} color="#A855F7" />
-                                    <p className="text-white font-bold">Geschlafene Zeit</p>
+                                    <p className="text-white font-bold">{t.ui.sleptTime}</p>
                                 </div>
                                 <Sparkles size={18} color="#A855F7" />
                             </div>
                             <div className="flex items-baseline gap-2">
                                 <span className="text-4xl font-bold text-white">{Math.floor(userStats.totalMinutes / 60)}</span>
-                                <span className="text-gray-400 text-lg">Stunden</span>
+                                <span className="text-gray-400 text-lg">{t.ui.hours}</span>
                                 <span className="text-gray-400 text-lg">{userStats.totalMinutes % 60}</span>
-                                <span className="text-gray-400 text-lg">Minuten</span>
+                                <span className="text-gray-400 text-lg">{t.ui.minutes}</span>
                             </div>
                             <p className="text-purple-400 text-xs mt-2">
-                                {userStats.totalNaps > 0 ? `Durchschnitt: ${Math.round(userStats.totalMinutes / userStats.totalNaps)} Min pro Nap` : 'Starte deinen ersten Nap!'}
+                                {userStats.totalNaps > 0 ? `${t.ui.average}: ${Math.round(userStats.totalMinutes / userStats.totalNaps)} ${t.ui.minPerNap}` : t.ui.startFirstNap}
                             </p>
                         </LinearGradient>
 
@@ -1089,20 +1286,20 @@ export default function App() {
                         <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700 mb-4">
                             <div className="flex items-center gap-2 mb-4">
                                 <Trophy size={20} color="#FACC15" />
-                                <p className="text-white font-bold text-lg">Bestleistungen</p>
+                                <p className="text-white font-bold text-lg">{t.ui.bestAchievements}</p>
                             </div>
                             <div className="flex flex-col gap-3">
                                 <div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-xl">
                                     <div className="flex items-center gap-3">
                                         <Flame size={18} color="orange" />
-                                        <span className="text-white">Längster Streak</span>
+                                        <span className="text-white">{t.ui.longestStreak}</span>
                                     </div>
-                                    <span className="text-white font-bold">{userStats.currentStreak} Tage</span>
+                                    <span className="text-white font-bold">{userStats.currentStreak} {t.ui.days}</span>
                                 </div>
                                 <div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-xl">
                                     <div className="flex items-center gap-3">
                                         <Calendar size={18} color="#3B82F6" />
-                                        <span className="text-white">Naps diese Woche</span>
+                                        <span className="text-white">{t.ui.napsThisWeek}</span>
                                     </div>
                                     <span className="text-white font-bold">
                                         {userStats.totalNaps > 0 ? Math.min(7, Math.floor(userStats.totalNaps / Math.max(1, Math.floor(userStats.totalNaps / 7)))) : 0}
@@ -1111,7 +1308,7 @@ export default function App() {
                                 <div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-xl">
                                     <div className="flex items-center gap-3">
                                         <BarChart3 size={18} color="#22c55e" />
-                                        <span className="text-white">Gesamt XP</span>
+                                        <span className="text-white">{t.ui.totalXP}</span>
                                     </div>
                                     <span className="text-white font-bold">{userStats.xp} XP</span>
                                 </div>
@@ -1125,7 +1322,7 @@ export default function App() {
                         >
                             <div className="flex items-center gap-2 mb-2">
                                 <Sparkles size={20} color="#8b5cf6" />
-                                <p className="text-white font-bold text-lg">Dein Fortschritt</p>
+                                <p className="text-white font-bold text-lg">{t.ui.yourProgress}</p>
                             </div>
                             {userStats.totalNaps === 0 ? (
                                 <p className="text-gray-300">
@@ -1133,7 +1330,7 @@ export default function App() {
                                 </p>
                             ) : userStats.totalNaps < 5 ? (
                                 <p className="text-gray-300">
-                                    Du bist auf dem richtigen Weg! {5 - userStats.totalNaps} weitere Naps bis zu deinem ersten Meilenstein! 🚀
+                                    {t.ui.onRightTrack} {5 - userStats.totalNaps} {t.ui.moreNaps} 🚀
                                 </p>
                             ) : userStats.currentStreak >= 7 ? (
                                 <p className="text-gray-300">
@@ -1141,7 +1338,7 @@ export default function App() {
                                 </p>
                             ) : (
                                 <p className="text-gray-300">
-                                    Großartig! Du hast bereits {userStats.totalNaps} Naps gemacht. Weiter so! ⭐
+                                    {t.ui.great} {t.ui.napsMade} ⭐
                                 </p>
                             )}
                         </LinearGradient>
@@ -1150,7 +1347,7 @@ export default function App() {
                         <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700 mb-4">
                             <div className="flex items-center gap-2 mb-4">
                                 <Calendar size={20} color="#3B82F6" />
-                                <p className="text-white font-bold text-lg">Diese Woche</p>
+                                <p className="text-white font-bold text-lg">{t.ui.thisWeek}</p>
                             </div>
                             <div className="flex justify-between items-end" style={{ height: 96, gap: 8 }}>
                                 {(() => {
@@ -1216,11 +1413,11 @@ export default function App() {
                                 })()}
                             </div>
                             <p className="text-gray-400 text-xs mt-3 text-center">
-                                Naps pro Tag (diese Woche)
+                                {t.ui.napsPerDay}
                             </p>
                         </div>
 
-                        {/* Level Fortschritt */}
+                        {/* Level Progress */}
                         <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700 mb-4">
                             <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
@@ -1258,7 +1455,7 @@ export default function App() {
                             >
                                 <span className="text-5xl text-white font-bold">{userStats.name ? userStats.name[0].toUpperCase() : '?'}</span>
                             </LinearGradient>
-                            <h2 className="text-3xl font-bold text-white mb-2">{userStats.name || 'Schläfer'}</h2>
+                            <h2 className="text-3xl font-bold text-white mb-2">{userStats.name || t.ui.sleeper}</h2>
                             <div className="flex items-center gap-2">
                                 <Trophy size={16} color="#FACC15" />
                                 <span className={`text-lg font-semibold ${currentLevel.color}`}>{currentLevel.name}</span>
@@ -1295,7 +1492,7 @@ export default function App() {
                             <div className="flex justify-between items-center mb-3">
                                 <div className="flex items-center gap-2">
                                     <Award size={20} color="#8b5cf6" />
-                                    <p className="text-white font-bold text-lg">Level Fortschritt</p>
+                                    <p className="text-white font-bold text-lg">{t.ui.levelProgress}</p>
                                 </div>
                                 <span className="text-gray-400 text-sm">{userStats.xp} / {nextLevel ? nextLevel.minXP : userStats.xp} XP</span>
                             </div>
@@ -1320,27 +1517,27 @@ export default function App() {
                         <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 mb-4">
                             <div className="flex items-center gap-2 mb-4">
                                 <Target size={20} color="#22c55e" />
-                                <p className="text-white font-bold text-lg">Erfolge</p>
+                                <p className="text-white font-bold text-lg">{t.ui.achievements}</p>
                             </div>
                             <div className="flex flex-col gap-3">
                                 <div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-xl">
                                     <div className="flex items-center gap-3">
                                         <Trophy size={20} color="#FACC15" />
-                                        <span className="text-white">Erster Nap</span>
+                                        <span className="text-white">{t.ui.firstNapAchievement}</span>
                                     </div>
                                     {userStats.totalNaps > 0 && <CheckCircle size={20} color="#22c55e" />}
                                 </div>
                                 <div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-xl">
                                     <div className="flex items-center gap-3">
                                         <Flame size={20} color="orange" />
-                                        <span className="text-white">7-Tage Streak</span>
+                                        <span className="text-white">{t.ui.sevenDayStreak}</span>
                                     </div>
                                     {userStats.currentStreak >= 7 && <CheckCircle size={20} color="#22c55e" />}
                                 </div>
                                 <div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-xl">
                                     <div className="flex items-center gap-3">
                                         <Moon size={20} color="#3B82F6" />
-                                        <span className="text-white">50 Naps</span>
+                                        <span className="text-white">{t.ui.fiftyNaps}</span>
                                     </div>
                                     {userStats.totalNaps >= 50 && <CheckCircle size={20} color="#22c55e" />}
                                 </div>
@@ -1349,24 +1546,54 @@ export default function App() {
 
                         {/* Settings */}
                         <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
-                            <p className="text-white font-bold text-lg mb-4">Einstellungen</p>
+                            <p className="text-white font-bold text-lg mb-4">{t.ui.settings}</p>
                             
                             {/* User Info */}
                             {user && (
                                 <div className="mb-4 p-4 bg-gray-700/50 rounded-xl">
-                                    <p className="text-gray-400 text-xs mb-1">E-Mail</p>
+                                    <p className="text-gray-400 text-xs mb-1">{t.ui.email}</p>
                                     <p className="text-white text-sm">{user.email}</p>
                                 </div>
                             )}
                             
                             <div className="flex flex-col gap-3">
+                                {/* Language Selection */}
+                                <div className="p-4 bg-gray-700/50 rounded-xl">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <Globe size={20} color="#8b5cf6" />
+                                        <span className="text-white font-semibold">{t.ui.language}</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => handleLanguageChange('de')}
+                                            className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-colors ${
+                                                language === 'de' 
+                                                    ? 'bg-blue-600 text-white' 
+                                                    : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                                            }`}
+                                        >
+                                            {t.ui.german}
+                                        </button>
+                                        <button
+                                            onClick={() => handleLanguageChange('en')}
+                                            className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-colors ${
+                                                language === 'en' 
+                                                    ? 'bg-blue-600 text-white' 
+                                                    : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                                            }`}
+                                        >
+                                            {t.ui.english}
+                                        </button>
+                                    </div>
+                                </div>
+                                
                                 <button 
                                     onClick={handleSignOut}
                                     className="flex items-center justify-between p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl w-full"
                                 >
                                     <div className="flex items-center gap-3">
                                         <User size={20} color="#3b82f6" />
-                                        <span className="text-blue-400 font-semibold">Abmelden</span>
+                                        <span className="text-blue-400 font-semibold">{t.ui.logout}</span>
                                     </div>
                                 </button>
                                 
@@ -1376,7 +1603,7 @@ export default function App() {
                                 >
                                     <div className="flex items-center gap-3">
                                         <X size={20} color="#ef4444" />
-                                        <span className="text-red-500 font-semibold">App zurücksetzen</span>
+                                        <span className="text-red-500 font-semibold">{t.ui.resetApp}</span>
                                     </div>
                                 </button>
                             </div>
@@ -1418,10 +1645,10 @@ export default function App() {
 
                         {/* Title */}
                         <h2 className="text-3xl text-white font-bold text-center mb-2">
-                            {isLoginMode ? 'Willkommen zurück' : 'Registrieren'}
+                            {isLoginMode ? t.ui.welcomeBack : t.ui.register}
                         </h2>
                         <p className="text-gray-400 text-center mb-8">
-                            {isLoginMode ? 'Melde dich an, um fortzufahren' : 'Erstelle ein Konto, um zu starten'}
+                            {isLoginMode ? t.ui.continueWith : t.ui.createAccount}
                         </p>
 
                         {/* Error Message */}
@@ -1438,7 +1665,7 @@ export default function App() {
                                 type="email"
                                 value={email} 
                                 onChange={(e) => setEmail(e.target.value)} 
-                                placeholder="E-Mail" 
+                                placeholder={t.ui.email} 
                                 className="flex-1 text-white text-base bg-transparent border-none outline-none"
                                 style={{ color: '#94a3b8' }}
                             />
@@ -1451,7 +1678,7 @@ export default function App() {
                                 type="password"
                                 value={password} 
                                 onChange={(e) => setPassword(e.target.value)} 
-                                placeholder="Passwort" 
+                                placeholder={t.ui.password} 
                                 className="flex-1 text-white text-base bg-transparent border-none outline-none"
                                 style={{ color: '#94a3b8' }}
                                 onKeyPress={(e) => {
@@ -1474,7 +1701,7 @@ export default function App() {
                                 style={{ paddingTop: 16, paddingBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}
                             >
                                 <span className="text-white font-bold text-lg">
-                                    {isLoginMode ? 'Anmelden' : 'Registrieren'}
+                                    {isLoginMode ? t.ui.login : t.ui.register}
                                 </span>
                             </LinearGradient>
                         </button>
@@ -1488,9 +1715,9 @@ export default function App() {
                             className="w-full text-center"
                         >
                             <span className="text-gray-400 text-sm">
-                                {isLoginMode ? 'Noch kein Konto? ' : 'Bereits ein Konto? '}
+                                {isLoginMode ? t.ui.noAccount + ' ' : t.ui.hasAccount + ' '}
                                 <span className="text-blue-400 font-semibold">
-                                    {isLoginMode ? 'Registrieren' : 'Anmelden'}
+                                    {isLoginMode ? t.ui.register : t.ui.login}
                                 </span>
                             </span>
                         </button>
@@ -1515,8 +1742,8 @@ export default function App() {
                         </div>
 
                         {/* Title */}
-                        <h2 className="text-3xl text-white font-bold text-center mb-2">Willkommen</h2>
-                        <p className="text-gray-400 text-center mb-8">Wie dürfen wir dich nennen?</p>
+                        <h2 className="text-3xl text-white font-bold text-center mb-2">{t.ui.welcome}</h2>
+                        <p className="text-gray-400 text-center mb-8">{t.ui.howCanWeCallYou}</p>
 
                         {/* Input Field */}
                         <div className="flex items-center bg-gray-800/50 border border-purple-500/30 rounded-xl px-4 py-3 mb-6">
@@ -1525,7 +1752,7 @@ export default function App() {
                                 type="text"
                                 value={tempName} 
                                 onChange={(e) => setTempName(e.target.value)} 
-                                placeholder="Dein Name" 
+                                placeholder={t.ui.yourName} 
                                 className="flex-1 text-white text-base bg-transparent border-none outline-none"
                                 style={{ color: '#94a3b8' }}
                             />
@@ -1620,10 +1847,10 @@ export default function App() {
                 <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 px-6">
                     <div className="bg-gray-800 p-8 rounded-2xl w-full max-w-md items-center border border-gray-700" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <CheckCircle size={50} color="#22c55e" className="mb-4" />
-                        <h2 className="text-2xl text-white font-bold mb-2">Guten Morgen!</h2>
-                        <p className="text-gray-400 mb-8">Energielevel wiederhergestellt.</p>
+                        <h2 className="text-2xl text-white font-bold mb-2">{t.ui.goodMorning}</h2>
+                        <p className="text-gray-400 mb-8">{t.ui.energyRestored}</p>
                         <button onClick={finishNap} className="bg-white w-full p-4 rounded-xl text-center">
-                            <span className="font-bold text-gray-900">XP Einsammeln</span>
+                            <span className="font-bold text-gray-900">{t.ui.xpCollect}</span>
                         </button>
                     </div>
                 </div>
