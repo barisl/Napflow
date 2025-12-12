@@ -9,6 +9,7 @@
     "ios": "expo start --ios --go",
     "web": "expo start --web",
     "web:pwa": "vite",
+    "build": "vite build",
     "build:pwa": "vite build",
     "preview:pwa": "vite preview"
   },
