@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './index.css';
-import { Play, Pause, Trophy, Activity, Moon, Battery, Zap, Wind, CheckCircle, Flame, Clock, Plus, Minus, X, User, RotateCcw, Star, Award, Target, TrendingUp, Calendar, BarChart3, Sparkles, Globe } from 'lucide-react';
+import { Play, Pause, Trophy, Activity, Moon, Battery, Zap, Wind, CheckCircle, Flame, Clock, Plus, Minus, X, User, RotateCcw, Star, Award, Target, TrendingUp, Calendar, BarChart3, Sparkles, Globe, Eye, EyeOff } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 // Translations
@@ -11,7 +11,7 @@ const translations = {
             { name: "Novize", minXP: 100, color: "text-blue-400" },
             { name: "Meister", minXP: 500, color: "text-green-400" },
             { name: "Traum-Reisender", minXP: 1500, color: "text-purple-400" },
-            { name: "Schlaf-Gott", minXP: 5000, color: "text-rose-500" },
+            { name: "Legende", minXP: 5000, color: "text-rose-500" },
         ],
         presets: [
             { id: 'focus', name: 'Power Focus', duration: 27 * 60, icon: Zap, color: 'bg-orange-500', desc: 'Ideal für Konzentration' },
@@ -44,6 +44,8 @@ const translations = {
             email: "E-Mail",
             logout: "Abmelden",
             logoutConfirm: "Möchtest du dich wirklich abmelden?",
+            show: "Zeigen",
+            hide: "Verbergen",
             language: "Sprache",
             german: "Deutsch",
             english: "English",
@@ -98,7 +100,7 @@ const translations = {
             { name: "Novice", minXP: 100, color: "text-blue-400" },
             { name: "Master", minXP: 500, color: "text-green-400" },
             { name: "Dream Traveler", minXP: 1500, color: "text-purple-400" },
-            { name: "Sleep God", minXP: 5000, color: "text-rose-500" },
+            { name: "Legend", minXP: 5000, color: "text-rose-500" },
         ],
         presets: [
             { id: 'focus', name: 'Power Focus', duration: 27 * 60, icon: Zap, color: 'bg-orange-500', desc: 'Ideal for concentration' },
@@ -131,6 +133,8 @@ const translations = {
             email: "E-Mail",
             logout: "Logout",
             logoutConfirm: "Do you really want to log out?",
+            show: "Show",
+            hide: "Hide",
             language: "Language",
             german: "Deutsch",
             english: "English",
@@ -448,6 +452,7 @@ export default function App() {
     const [isLoaded, setIsLoaded] = useState(false);
     const isUpdatingStatsRef = useRef(false); // Prevent loadUserData from overwriting updates
     const [language, setLanguage] = useState('en'); // 'de' or 'en'
+    const [showEmail, setShowEmail] = useState(false); // Email visibility in profile
     
     // Get current translations
     const t = translations[language] || translations.de;
@@ -1554,7 +1559,30 @@ export default function App() {
                             {user && (
                                 <div className="mb-4 p-4 bg-gray-700/50 rounded-xl">
                                     <p className="text-gray-400 text-xs mb-1">{t.ui.email}</p>
-                                    <p className="text-white text-sm">{user.email}</p>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p 
+                                            className={`text-white text-sm flex-1 ${showEmail ? '' : 'blur-sm select-none'}`}
+                                            style={showEmail ? {} : { userSelect: 'none', WebkitUserSelect: 'none' }}
+                                        >
+                                            {user.email}
+                                        </p>
+                                        <button
+                                            onClick={() => setShowEmail(!showEmail)}
+                                            className="flex items-center gap-1 px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 rounded-lg transition-colors"
+                                        >
+                                            {showEmail ? (
+                                                <>
+                                                    <EyeOff size={14} color="#3b82f6" />
+                                                    <span className="text-blue-400 text-xs">{t.ui.hide || "Verbergen"}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Eye size={14} color="#3b82f6" />
+                                                    <span className="text-blue-400 text-xs">{t.ui.show}</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                             
