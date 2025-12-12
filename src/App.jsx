@@ -447,7 +447,7 @@ export default function App() {
     const [weeklyNaps, setWeeklyNaps] = useState({}); // { '2024-01-15': 2, '2024-01-16': 1, ... }
     const [isLoaded, setIsLoaded] = useState(false);
     const isUpdatingStatsRef = useRef(false); // Prevent loadUserData from overwriting updates
-    const [language, setLanguage] = useState('de'); // 'de' or 'en'
+    const [language, setLanguage] = useState('en'); // 'de' or 'en'
     
     // Get current translations
     const t = translations[language] || translations.de;
