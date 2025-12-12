@@ -44,7 +44,6 @@ const translations = {
             email: "E-Mail",
             logout: "Abmelden",
             logoutConfirm: "Möchtest du dich wirklich abmelden?",
-            refresh: "Daten aktualisieren",
             language: "Sprache",
             german: "Deutsch",
             english: "English",
@@ -132,7 +131,6 @@ const translations = {
             email: "E-Mail",
             logout: "Logout",
             logoutConfirm: "Do you really want to log out?",
-            refresh: "Refresh Data",
             language: "Language",
             german: "Deutsch",
             english: "English",
@@ -1590,23 +1588,6 @@ export default function App() {
                                         </button>
                                     </div>
                                 </div>
-                                
-                                {/* Refresh Data Button */}
-                                <button 
-                                    onClick={() => {
-                                        if (user) {
-                                            loadUserData(user).catch(err => {
-                                                console.error('Error refreshing data:', err);
-                                            });
-                                        }
-                                    }}
-                                    className="flex items-center justify-between p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl w-full"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <RotateCcw size={20} color="#3b82f6" />
-                                        <span className="text-blue-400 font-semibold">{t.ui.refresh}</span>
-                                    </div>
-                                </button>
                                 
                                 <button 
                                     onClick={handleSignOut}
