@@ -1446,7 +1446,7 @@ export default function App() {
                                 />
                             </div>
                             <p className="text-gray-400 text-sm">
-                                {isMaxLevel ? '🎉 Maximales Level erreicht!' : `${xpForNextLevel} XP bis ${nextLevel.name}`}
+                                {isMaxLevel ? t.ui.maxLevelReached : `${xpForNextLevel} ${t.ui.xpUntil} ${nextLevel.name}`}
                             </p>
                         </div>
                     </div>
@@ -1516,7 +1516,7 @@ export default function App() {
                                 />
                             </div>
                             <p className="text-gray-400 text-sm">
-                                {isMaxLevel ? '🎉 Maximales Level erreicht!' : `${xpForNextLevel} XP bis ${nextLevel.name}`}
+                                {isMaxLevel ? t.ui.maxLevelReached : `${xpForNextLevel} ${t.ui.xpUntil} ${nextLevel.name}`}
                             </p>
                         </div>
 
